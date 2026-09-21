@@ -1,0 +1,46 @@
+{
+  "$id": "https://altinncdn.no/schemas/json/calculation/calculation.schema.v1.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Altinn 3 Calculation",
+  "description": "Schema that describes the custom calculation configuration for Altinn applications.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "title": "Schema",
+      "description": "The schema that this file adheres to"
+    },
+    "calculations": {
+      "type": "array",
+      "title": "Calculations",
+      "description": "List of calculations that set data model fields from expressions. The calculations run in order every time the data is changed.",
+      "items": {
+        "$ref": "#/definitions/calculation"
+      }
+    }
+  },
+  "required": ["calculations"],
+  "definitions": {
+    "calculation": {
+      "type": "object",
+      "title": "Calculation",
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "title": "Field",
+          "description": "The data model field to set, as a dot-separated path (e.g. \"order.total\"). Use empty brackets to run the calculation for every row of a repeating group (e.g. \"order.lines[].total\"); the row indexes are then available to the expression.",
+          "examples": ["order.total", "order.lines[].total"]
+        },
+        "expression": {
+          "title": "Expression",
+          "description": "The expression that produces the value for the field. It is evaluated in the context of the field, so dataModel lookups without indexes resolve to the current row of a repeating group. The result can be any value, including lists and objects.",
+          "$ref": "../layout/expression.schema.v1.json#/definitions/any"
+        }
+      },
+      "required": ["field", "expression"]
+    }
+  }
+}
