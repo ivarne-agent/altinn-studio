@@ -66,47 +66,22 @@ define create-sync-branch
 	git checkout -b $$branch_name origin/$(DEFAULT_BRANCH)
 endef
 
-# Handle merge conflicts (waits for user to resolve, then commits)
-define handle-conflicts
-	echo ""; \
-	echo "==============================================="; \
-	echo "Merge conflicts detected!"; \
-	echo "==============================================="; \
-	echo ""; \
-	echo "Please resolve the conflicts in your editor."; \
-	read -p "Press Enter after resolving conflicts..." dummy; \
-	while git diff --name-only --diff-filter=U | grep -q .; do \
-		echo ""; \
-		echo "ERROR: There are still unresolved conflicts:"; \
-		git diff --name-only --diff-filter=U; \
-		echo ""; \
-		read -p "Press Enter after resolving all conflicts..." dummy; \
-	done; \
-	echo "Committing resolved conflicts..."; \
-	git add . && git commit --no-edit
-endef
-
-# Pull a single subtree (usage: $(call pull-subtree,name,prefix,repo-url,branch))
-define pull-subtree
-	echo ""; \
-	echo "Syncing $(1) subtree from $(3) ($(4))..."; \
-	git fetch $(3) $(4) && \
-	if GIT_MERGE_AUTOEDIT=no git subtree pull --prefix=$(2) $(3) $(4); then \
-		echo "OK: $(1) subtree synced successfully"; \
-	else \
-		$(handle-conflicts); \
-	fi;
+# Merge an upstream branch into a subtree prefix
+# (usage: $(call merge-subtree,name,prefix,repo-url,branch))
+#
+# The script probes the pending upstream commits from newest to oldest and
+# merges the newest one that merges cleanly (normally the tip, in one merge).
+# When even the oldest pending commit conflicts it is merged on its own so the
+# conflicts are resolved for that commit only, and the script continues with
+# the rest. A failed sync stops the recipe instead of moving on to the next
+# subtree.
+define merge-subtree
+	node scripts/subtree-sync/sync-subtree.mjs --name $(1) --prefix $(2) --repo $(3) --branch $(4) || exit 1;
 endef
 
 # Pull a single test app (usage: $(call pull-test-app,name,repo-url,branch))
 define pull-test-app
-	echo "Syncing test app $(1) from $(2) ($(3))..."; \
-	git fetch $(2) $(3) && \
-	if GIT_MERGE_AUTOEDIT=no git subtree pull --prefix=src/test/apps/$(1) $(2) $(3); then \
-		echo "OK: $(1) synced successfully"; \
-	else \
-		$(handle-conflicts); \
-	fi;
+	$(call merge-subtree,$(1),src/test/apps/$(1),$(2),$(3))
 endef
 
 # Pull all test apps (uses | delimiter)
@@ -118,7 +93,7 @@ endef
 # Pull all main subtrees
 define pull-all-subtrees
 	@$(foreach subtree,$(SUBTREES), \
-		$(call pull-subtree,$(word 1,$(subst |, ,$(subtree))),$(word 2,$(subst |, ,$(subtree))),$(word 3,$(subst |, ,$(subtree))),$(word 4,$(subst |, ,$(subtree)))))
+		$(call merge-subtree,$(word 1,$(subst |, ,$(subtree))),$(word 2,$(subst |, ,$(subtree))),$(word 3,$(subst |, ,$(subtree))),$(word 4,$(subst |, ,$(subtree)))))
 endef
 
 # =============================================================================
@@ -150,8 +125,9 @@ create-pr:
 # which breaks command separation and the @-silenced recursive make call.
 define sync-target-template
 sync-$(word 1,$(subst |, ,$(1))):
+	$$(check-clean-working-tree)
 	$$(call create-sync-branch,$(word 1,$(subst |, ,$(1))))
-	$$(call pull-subtree,$(word 1,$(subst |, ,$(1))),$(word 2,$(subst |, ,$(1))),$(word 3,$(subst |, ,$(1))),$(word 4,$(subst |, ,$(1))))
+	@$$(call merge-subtree,$(word 1,$(subst |, ,$(1))),$(word 2,$(subst |, ,$(1))),$(word 3,$(subst |, ,$(1))),$(word 4,$(subst |, ,$(1))))
 	@$$(MAKE) create-pr SUBTREE_NAME=$(word 1,$(subst |, ,$(1)))
 endef
 
