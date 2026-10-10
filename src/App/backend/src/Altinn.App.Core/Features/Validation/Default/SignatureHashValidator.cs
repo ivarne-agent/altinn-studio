@@ -131,7 +131,12 @@ internal sealed class SignatureHashValidator(
                 sha256Hash
             );
 
-            return BuiltInValidationIssues.InvalidSignatureHash();
+            var dataElement = instance.Data.Find(element => element.Id == dataElementSignature.DataElementId);
+            return BuiltInValidationIssues.InvalidSignatureHash(
+                dataElementId: dataElementSignature.DataElementId,
+                filename: dataElement?.Filename,
+                dataType: dataElement?.DataType
+            );
         }
 
         return null;

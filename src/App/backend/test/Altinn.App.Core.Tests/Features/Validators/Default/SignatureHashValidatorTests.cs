@@ -93,6 +93,15 @@ public class SignatureHashValidatorTests
         Assert.Equal(ValidationIssueSeverity.Error, result[0].Severity);
         Assert.Equal("backend.validation_errors.invalid_signature_hash", result[0].CustomTextKey);
         Assert.Null(result[0].Description);
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["dataElementId"] = "550e8400-e29b-41d4-a716-446655440001",
+                ["filename"] = "",
+                ["dataType"] = "form",
+            },
+            result[0].CustomTextParameters
+        );
     }
 
     [Fact]

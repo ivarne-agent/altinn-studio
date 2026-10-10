@@ -227,11 +227,21 @@ internal static class BuiltInValidationIssues
                 nn: "Signerte data er endra etter at signaturen vart utført.",
                 en: "The signed data has been modified after the signature was made."
             ),
+            CustomTextParameters =
+            [
+                new("dataElementId", "Id of the signed data element that has changed."),
+                _filename,
+                _dataType,
+            ],
         },
     };
 
-    public static ValidationIssue InvalidSignatureHash() =>
-        InvalidSignatureHashDefinition.Create(dataElementId: null, field: null, []);
+    public static ValidationIssue InvalidSignatureHash(string dataElementId, string? filename, string? dataType) =>
+        InvalidSignatureHashDefinition.Create(
+            dataElementId: null,
+            field: null,
+            [dataElementId, filename ?? "", dataType ?? ""]
+        );
 
     // Data model
 

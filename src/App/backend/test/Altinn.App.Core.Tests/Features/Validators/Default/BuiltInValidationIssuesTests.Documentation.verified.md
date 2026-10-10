@@ -10,7 +10,7 @@
 | `TooManyDataElementsOfType` | Error | `backend.validation_errors.too_many_data_elements` | `maxCount`, `dataType` |
 | `TooFewDataElementsOfType` | Error | `backend.validation_errors.too_few_data_elements` | `minCount`, `dataType` |
 | `MissingSignatures` | Error | `backend.validation_errors.missing_signatures` | none |
-| `InvalidSignatureHash` | Error | `backend.validation_errors.invalid_signature_hash` | none |
+| `InvalidSignatureHash` | Error | `backend.validation_errors.invalid_signature_hash` | `dataElementId`, `filename`, `dataType` |
 | `required` | Error | `backend.validation_errors.required` | `field`, `layoutId`, `pageId`, `componentId`, `bindingName`, `pageName`, `componentTitle` |
 | `Xsd` | Error | `backend.xsd_validation` | `schema`, `message` |
 
@@ -159,6 +159,12 @@ Code `InvalidSignatureHash`, severity Error.
 | nb | Signerte data er endret etter at signaturen ble utført. |
 | nn | Signerte data er endra etter at signaturen vart utført. |
 | en | The signed data has been modified after the signature was made. |
+
+| Custom text parameter | Description |
+|---|---|
+| `dataElementId` | Id of the signed data element that has changed. |
+| `filename` | Name of the file. Empty if the name is unknown. |
+| `dataType` | Id of the data type. |
 
 ## `backend.validation_errors.required`
 
