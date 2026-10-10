@@ -1,6 +1,5 @@
 using System.Text.RegularExpressions;
 using Altinn.App.Core.Features;
-using Altinn.App.Core.Features.Validation.Default;
 using Altinn.App.Core.Internal.App;
 using Altinn.App.Core.Internal.Expressions;
 using Altinn.App.Core.Internal.Language;
@@ -285,59 +284,10 @@ internal sealed class TranslationService : ITranslationService
         return GetBackendFallbackResource(key, language);
     }
 
-    private static TextResourceElement? GetBackendFallbackResource(string key, string language)
-    {
-        if (BuiltInValidationIssues.TextResources.TryGetValue(key, out var textResource))
-        {
-            return textResource.GetDefaultResource(language);
-        }
-
-        switch (key)
-        {
-            case "backend.pdf_default_file_name":
-                return new TextResourceElement()
-                {
-                    Id = "backend.pdf_default_file_name",
-                    Value = "{0}.pdf",
-                    Variables =
-                    [
-                        new TextResourceVariable()
-                        {
-                            Key = "appName",
-                            DataSource = "text",
-                            DefaultValue = "Altinn PDF",
-                        },
-                    ],
-                };
-            case "pdfPreviewText":
-                return Localized(
-                    key,
-                    language,
-                    nb: "Dokumentet er en forhåndsvisning",
-                    nn: "Dokumentet er ein førehandsvisning",
-                    en: "The document is a preview"
-                );
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Builds a built-in text in the requested language.
-    /// </summary>
-    private static TextResourceElement Localized(string key, string language, string nb, string nn, string en)
-    {
-        return new TextResourceElement()
-        {
-            Id = key,
-            Value = language switch
-            {
-                LanguageConst.Nb => nb,
-                LanguageConst.Nn => nn,
-                _ => en,
-            },
-        };
-    }
+    private static TextResourceElement? GetBackendFallbackResource(string key, string language) =>
+        BuiltInTextResources.ByKey.TryGetValue(key, out var textResource)
+            ? textResource.GetDefaultResource(language)
+            : null;
 
     /// <summary>
     /// Get the first matching text resource value for the specified keys in the specified language.

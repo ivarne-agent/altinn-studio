@@ -17,8 +17,8 @@ public class ValidationIssueDefinitionTests
             TextResource = new()
             {
                 Key = "backend.test",
-                DefaultText = LocalizedText.Create(nb: "{name}", nn: "{name}", en: "{name}"),
-                CustomTextParameters = [new("name", "A name")],
+                Texts = LocalizedText.Create(nb: "{name}", nn: "{name}", en: "{name}"),
+                Variables = [new CustomTextParameter("name", "A name")],
             },
         };
 

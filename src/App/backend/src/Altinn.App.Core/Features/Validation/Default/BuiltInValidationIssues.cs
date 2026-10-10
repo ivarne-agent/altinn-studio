@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using System.Globalization;
 using Altinn.App.Core.Internal.Texts;
 using Altinn.App.Core.Internal.Validation;
@@ -31,12 +30,12 @@ internal static class BuiltInValidationIssues
         TextResource = new()
         {
             Key = "backend.validation_errors.missing_content_type",
-            DefaultText = LocalizedText.Create(
+            Texts = LocalizedText.Create(
                 nb: "Filen har ingen filtype.",
                 nn: "Fila har ingen filtype.",
                 en: "The file is missing a content type."
             ),
-            CustomTextParameters = [_filename, _dataType],
+            Variables = [_filename, _dataType],
         },
     };
 
@@ -52,17 +51,17 @@ internal static class BuiltInValidationIssues
         TextResource = new()
         {
             Key = "altinn.standard_validation.file_content_type_not_allowed",
-            DefaultText = LocalizedText.Create(
+            Texts = LocalizedText.Create(
                 nb: "Det ser ut som du prøver å laste opp en filtype som ikke er tillatt. Sjekk at filen faktisk er av den typen den utgir seg for å være. Tillatte filtyper er: {allowedContentTypes}.",
                 nn: "Det ser ut som du prøver å lasta opp ein filtype som ikkje er tillaten. Sjekk at fila faktisk er av den typen han gir seg ut for å vera. Tillatne filtypar er: {allowedContentTypes}.",
                 en: "It looks like you are trying to upload a file type that is not allowed. Please make sure that the file is actually the type it claims to be. Allowed file types are: {allowedContentTypes}."
             ),
-            CustomTextParameters =
+            Variables =
             [
                 _filename,
                 _dataType,
-                new("contentType", "Content type of the file, without parameters like charset."),
-                new("allowedContentTypes", "The allowed content types, separated by commas."),
+                new CustomTextParameter("contentType", "Content type of the file, without parameters like charset."),
+                new CustomTextParameter("allowedContentTypes", "The allowed content types, separated by commas."),
             ],
         },
     };
@@ -88,12 +87,12 @@ internal static class BuiltInValidationIssues
         TextResource = new()
         {
             Key = "backend.validation_errors.file_too_large",
-            DefaultText = LocalizedText.Create(
+            Texts = LocalizedText.Create(
                 nb: "Filen er for stor. Største tillatte filstørrelse er {maxSize} MB.",
                 nn: "Fila er for stor. Største tillatne filstorleik er {maxSize} MB.",
                 en: "The file is too large. The maximum file size is {maxSize} MB."
             ),
-            CustomTextParameters = [_filename, _dataType, new("maxSize", "Largest allowed file size in MB.")],
+            Variables = [_filename, _dataType, new CustomTextParameter("maxSize", "Largest allowed file size in MB.")],
         },
     };
 
@@ -112,12 +111,12 @@ internal static class BuiltInValidationIssues
         TextResource = new()
         {
             Key = "backend.validation_errors.file_infected",
-            DefaultText = LocalizedText.Create(
+            Texts = LocalizedText.Create(
                 nb: "Filen er infisert med skadelig programvare og kan ikke brukes.",
                 nn: "Fila er infisert med skadeleg programvare og kan ikkje brukast.",
                 en: "The file is infected with malware and cannot be used."
             ),
-            CustomTextParameters = [_filename, _dataType],
+            Variables = [_filename, _dataType],
         },
     };
 
@@ -133,12 +132,12 @@ internal static class BuiltInValidationIssues
         TextResource = new()
         {
             Key = "backend.validation_errors.file_scan_pending",
-            DefaultText = LocalizedText.Create(
+            Texts = LocalizedText.Create(
                 nb: "Filen blir skannet for skadelig programvare. Vent til skanningen er ferdig.",
                 nn: "Fila blir skanna for skadeleg programvare. Vent til skanninga er ferdig.",
                 en: "The file is being scanned for malware. Please wait until the scan is complete."
             ),
-            CustomTextParameters = [_filename, _dataType],
+            Variables = [_filename, _dataType],
         },
     };
 
@@ -155,12 +154,12 @@ internal static class BuiltInValidationIssues
         TextResource = new()
         {
             Key = "backend.validation_errors.too_many_data_elements",
-            DefaultText = LocalizedText.Create(
+            Texts = LocalizedText.Create(
                 nb: "Det er lagt til flere enn {maxCount} elementer av typen {dataType}.",
                 nn: "Det er lagt til fleire enn {maxCount} element av typen {dataType}.",
                 en: "More than {maxCount} items of type {dataType} have been added."
             ),
-            CustomTextParameters = [new("maxCount", "Largest allowed number of data elements."), _dataType],
+            Variables = [new CustomTextParameter("maxCount", "Largest allowed number of data elements."), _dataType],
         },
     };
 
@@ -179,12 +178,12 @@ internal static class BuiltInValidationIssues
         TextResource = new()
         {
             Key = "backend.validation_errors.too_few_data_elements",
-            DefaultText = LocalizedText.Create(
+            Texts = LocalizedText.Create(
                 nb: "Det må legges til minst {minCount} elementer av typen {dataType}.",
                 nn: "Det må leggjast til minst {minCount} element av typen {dataType}.",
                 en: "At least {minCount} items of type {dataType} must be added."
             ),
-            CustomTextParameters = [new("minCount", "Smallest allowed number of data elements."), _dataType],
+            Variables = [new CustomTextParameter("minCount", "Smallest allowed number of data elements."), _dataType],
         },
     };
 
@@ -203,17 +202,17 @@ internal static class BuiltInValidationIssues
         TextResource = new()
         {
             Key = "backend.validation_errors.missing_signatures",
-            DefaultText = LocalizedText.Create(
+            Texts = LocalizedText.Create(
                 nb: "Det mangler påkrevde signaturer.",
                 nn: "Det manglar påkravde signaturar.",
                 en: "Required signatures are missing."
             ),
-            CustomTextParameters =
+            Variables =
             [
-                new("signedCount", "Number of signees who have signed."),
-                new("signeeCount", "Number of signees for the task."),
-                new("minCount", "Smallest number of signatures the signature data type requires."),
-                new("dataType", "Id of the signature data type."),
+                new CustomTextParameter("signedCount", "Number of signees who have signed."),
+                new CustomTextParameter("signeeCount", "Number of signees for the task."),
+                new CustomTextParameter("minCount", "Smallest number of signatures the signature data type requires."),
+                new CustomTextParameter("dataType", "Id of the signature data type."),
             ],
         },
     };
@@ -238,14 +237,14 @@ internal static class BuiltInValidationIssues
         TextResource = new()
         {
             Key = "backend.validation_errors.invalid_signature_hash",
-            DefaultText = LocalizedText.Create(
+            Texts = LocalizedText.Create(
                 nb: "Signerte data er endret etter at signaturen ble utført.",
                 nn: "Signerte data er endra etter at signaturen vart utført.",
                 en: "The signed data has been modified after the signature was made."
             ),
-            CustomTextParameters =
+            Variables =
             [
-                new("dataElementId", "Id of the signed data element that has changed."),
+                new CustomTextParameter("dataElementId", "Id of the signed data element that has changed."),
                 _filename,
                 _dataType,
             ],
@@ -269,20 +268,19 @@ internal static class BuiltInValidationIssues
         TextResource = new()
         {
             Key = "backend.validation_errors.required",
-            DefaultText = LocalizedText.Create(
-                nb: "Feltet er påkrevd",
-                nn: "Feltet er påkravd",
-                en: "Field is required"
-            ),
-            CustomTextParameters =
+            Texts = LocalizedText.Create(nb: "Feltet er påkrevd", nn: "Feltet er påkravd", en: "Field is required"),
+            Variables =
             [
-                new("field", "Path of the field in the data model."),
-                new("layoutId", "Id of the layout set."),
-                new("pageId", "Id of the page."),
-                new("componentId", "Id of the component."),
-                new("bindingName", "Name of the data model binding, like simpleBinding."),
-                new("pageName", "The page id translated as a text resource."),
-                new("componentTitle", "The component's title. Only set when the title is a text, not an expression."),
+                new CustomTextParameter("field", "Path of the field in the data model."),
+                new CustomTextParameter("layoutId", "Id of the layout set."),
+                new CustomTextParameter("pageId", "Id of the page."),
+                new CustomTextParameter("componentId", "Id of the component."),
+                new CustomTextParameter("bindingName", "Name of the data model binding, like simpleBinding."),
+                new CustomTextParameter("pageName", "The page id translated as a text resource."),
+                new CustomTextParameter(
+                    "componentTitle",
+                    "The component's title. Only set when the title is a text, not an expression."
+                ),
             ],
         },
     };
@@ -311,15 +309,15 @@ internal static class BuiltInValidationIssues
         TextResource = new()
         {
             Key = "backend.xsd_validation",
-            DefaultText = LocalizedText.Create(
+            Texts = LocalizedText.Create(
                 nb: "Et felt bryter reglene satt av XSD. Melding: {message}",
                 nn: "Eit felt bryt reglane sette av XSD. Melding: {message}",
                 en: "A field is in violation of the rules set by the XSD schema. Message: {message}"
             ),
-            CustomTextParameters =
+            Variables =
             [
-                new("schema", "Id of the data type whose schema was violated."),
-                new("message", "The message from the XML schema validation."),
+                new CustomTextParameter("schema", "Id of the data type whose schema was violated."),
+                new CustomTextParameter("message", "The message from the XML schema validation."),
             ],
         },
     };
@@ -343,9 +341,4 @@ internal static class BuiltInValidationIssues
         RequiredDefinition,
         XsdValidationDefinition,
     ];
-
-    public static readonly FrozenDictionary<string, BackendTextResource> TextResources = All.ToFrozenDictionary(
-        definition => definition.TextResource.Key,
-        definition => definition.TextResource
-    );
 }

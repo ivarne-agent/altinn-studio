@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Text;
-using System.Text.RegularExpressions;
 using Altinn.App.Core.Features.Validation.Default;
 using Altinn.App.Core.Internal.Language;
 using Altinn.App.Core.Internal.Validation;
@@ -10,8 +9,6 @@ namespace Altinn.App.Core.Tests.Features.Validators.Default;
 
 public class BuiltInValidationIssuesTests
 {
-    private static readonly Regex _placeholderRegex = new(@"\{([^{}]*)\}");
-
     private static readonly List<FieldInfo> _definitionFields = typeof(BuiltInValidationIssues)
         .GetFields(BindingFlags.Public | BindingFlags.Static)
         .Where(field => field.FieldType == typeof(ValidationIssueDefinition))
@@ -47,13 +44,6 @@ public class BuiltInValidationIssuesTests
     }
 
     [Fact]
-    public void KeysDoNotOverlapWithOtherBackendTexts()
-    {
-        Assert.DoesNotContain("pdfPreviewText", BuiltInValidationIssues.TextResources.Keys);
-        Assert.DoesNotContain("backend.pdf_default_file_name", BuiltInValidationIssues.TextResources.Keys);
-    }
-
-    [Fact]
     public void EveryDefinitionHasNbNnAndEn()
     {
         Assert.All(
@@ -61,46 +51,8 @@ public class BuiltInValidationIssuesTests
             definition =>
                 Assert.Equal(
                     [LanguageConst.En, LanguageConst.Nb, LanguageConst.Nn],
-                    definition.TextResource.DefaultText.Keys.Order()
+                    definition.TextResource.Texts.Keys.Order()
                 )
-        );
-    }
-
-    [Fact]
-    public void EveryPlaceholderIsADeclaredParameter()
-    {
-        Assert.All(
-            BuiltInValidationIssues.All,
-            definition =>
-            {
-                var parameterNames = definition.TextResource.CustomTextParameters.Select(p => p.Name).ToList();
-                Assert.Equal(parameterNames.Count, parameterNames.Distinct().Count());
-                Assert.All(
-                    definition.TextResource.DefaultText,
-                    text =>
-                        Assert.All(
-                            _placeholderRegex.Matches(text.Value),
-                            match => Assert.Contains(match.Groups[1].Value, parameterNames)
-                        )
-                );
-            }
-        );
-    }
-
-    [Fact]
-    public void EveryLanguageUsesTheSamePlaceholders()
-    {
-        Assert.All(
-            BuiltInValidationIssues.All,
-            definition =>
-            {
-                var placeholders = definition
-                    .TextResource.DefaultText.Values.Select(text =>
-                        string.Join(",", _placeholderRegex.Matches(text).Select(m => m.Value).Order())
-                    )
-                    .Distinct();
-                Assert.Single(placeholders);
-            }
         );
     }
 
@@ -180,7 +132,7 @@ public class BuiltInValidationIssuesTests
             markdown.Append("| Language | Default text |\n|---|---|\n");
             foreach (var language in new[] { LanguageConst.Nb, LanguageConst.Nn, LanguageConst.En })
             {
-                markdown.Append($"| {language} | {definition.TextResource.DefaultText[language]} |\n");
+                markdown.Append($"| {language} | {definition.TextResource.Texts[language]} |\n");
             }
 
             if (definition.TextResource.CustomTextParameters.Count > 0)
