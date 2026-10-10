@@ -62,58 +62,57 @@ public sealed class ValidationDescriptionTextKeyMigrationTests : IDisposable
     }
 
     [Fact]
-    public async Task Moves_a_text_key_in_a_target_typed_initializer_and_an_assignment()
+    public async Task Moves_a_text_key_in_a_target_typed_initializer()
     {
         var (migrated, _) = await Migrate(
             """
             using Altinn.App.Core.Models.Validation;
             public class Validator
             {
-                public ValidationIssue Run()
-                {
-                    ValidationIssue issue = new() { Field = "a" };
-                    issue.Description = "my.error";
-                    return issue;
-                }
-
-                public ValidationIssue Other() => new() { Description = "my.error" };
+                public ValidationIssue Run() => new() { Description = "my.error" };
             }
             """
         );
 
-        Assert.Contains("issue.CustomTextKey = \"my.error\";", migrated);
         Assert.Contains("new() { CustomTextKey = \"my.error\" }", migrated);
-        Assert.DoesNotContain("Description", migrated);
     }
 
     [Fact]
-    public async Task Moves_a_const_and_renames_a_key_the_upgrade_renamed()
+    public async Task Moves_a_key_the_upgrade_renamed_to_the_new_key()
     {
         var (migrated, result) = await Migrate(
             """
             using Altinn.App.Core.Models.Validation;
             public class Validator
             {
-                private const string Key = "my.error";
-                public ValidationIssue A() => new ValidationIssue { Description = Key };
-                public ValidationIssue B() => new ValidationIssue { Description = "date_picker.min_date_exeeded" };
+                public ValidationIssue Run() => new ValidationIssue { Description = "date_picker.min_date_exeeded" };
             }
             """
         );
 
-        Assert.Contains("new ValidationIssue { CustomTextKey = Key }", migrated);
         Assert.Contains("new ValidationIssue { CustomTextKey = \"date_picker.min_date_exceeded\" }", migrated);
         Assert.Contains(result.Warnings, w => w.Contains("-> CustomTextKey = \"date_picker.min_date_exceeded\""));
     }
 
     [Fact]
-    public async Task Leaves_descriptions_that_are_not_text_keys()
+    public async Task Leaves_assignments_constants_run_time_values_and_texts()
     {
         var source = """
             using Altinn.App.Core.Models.Validation;
             public class Validator
             {
-                public ValidationIssue Run() => new ValidationIssue { Description = "Something is wrong" };
+                private const string Key = "my.error";
+
+                public ValidationIssue A()
+                {
+                    var issue = new ValidationIssue();
+                    issue.Description = "my.error";
+                    return issue;
+                }
+
+                public ValidationIssue B() => new ValidationIssue { Description = Key };
+                public ValidationIssue C(string field) => new ValidationIssue { Description = $"{field} is wrong" };
+                public ValidationIssue D() => new ValidationIssue { Description = "Something is wrong" };
             }
             """;
 
@@ -123,33 +122,17 @@ public sealed class ValidationDescriptionTextKeyMigrationTests : IDisposable
         Assert.Empty(result.Messages);
     }
 
-    [Fact]
-    public async Task Leaves_a_description_when_custom_text_key_is_set_too_and_asks_for_follow_up()
+    [Theory]
+    [InlineData("\"my.error\"")]
+    [InlineData("\"Something is wrong\"")]
+    public async Task Warns_when_custom_text_key_is_set_too(string description)
     {
-        var source = """
+        var source = $$"""
             using Altinn.App.Core.Models.Validation;
             public class Validator
             {
                 public ValidationIssue Run() =>
-                    new ValidationIssue { Description = "my.error", CustomTextKey = "other.error" };
-            }
-            """;
-
-        var (migrated, result) = await Migrate(source);
-
-        Assert.Equal(source, migrated);
-        Assert.True(result.RequiresManualFollowUp);
-        Assert.Contains(result.Todos, t => t.Contains("CustomTextKey is set too"));
-    }
-
-    [Fact]
-    public async Task Lists_descriptions_with_a_value_known_only_at_run_time()
-    {
-        var source = """
-            using Altinn.App.Core.Models.Validation;
-            public class Validator
-            {
-                public ValidationIssue Run(string field) => new ValidationIssue { Description = $"{field} is wrong" };
+                    new ValidationIssue { Description = {{description}}, CustomTextKey = "other.error" };
             }
             """;
 
@@ -157,7 +140,8 @@ public sealed class ValidationDescriptionTextKeyMigrationTests : IDisposable
 
         Assert.Equal(source, migrated);
         Assert.False(result.RequiresManualFollowUp);
-        Assert.Contains(result.Warnings, w => w.Contains("Validator.cs:4: Description = $\"{field} is wrong\""));
+        Assert.Contains(result.Warnings, w => w.Contains("v9 only uses CustomTextKey"));
+        Assert.Contains(result.Warnings, w => w.EndsWith("Validator.cs:5", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -167,6 +151,7 @@ public sealed class ValidationDescriptionTextKeyMigrationTests : IDisposable
             public class MyIssue
             {
                 public string? Description { get; set; }
+                public string? CustomTextKey { get; set; }
             }
 
             public class ValidationIssueWithSource
@@ -177,7 +162,8 @@ public sealed class ValidationDescriptionTextKeyMigrationTests : IDisposable
             public class Validator
             {
                 public object A() => new MyIssue { Description = "my.error" };
-                public object B() => new ValidationIssueWithSource { Description = "my.error" };
+                public object B() => new MyIssue { Description = "my.error", CustomTextKey = "my.error" };
+                public object C() => new ValidationIssueWithSource { Description = "my.error" };
             }
             """;
 
@@ -188,7 +174,7 @@ public sealed class ValidationDescriptionTextKeyMigrationTests : IDisposable
     }
 
     [Fact]
-    public async Task Without_a_semantic_model_moves_only_initializers_of_ValidationIssue_as_unverified()
+    public async Task Without_a_semantic_model_moves_only_explicit_ValidationIssue_initializers_as_unverified()
     {
         var (migrated, result) = await Migrate(
             """
@@ -196,18 +182,14 @@ public sealed class ValidationDescriptionTextKeyMigrationTests : IDisposable
             public class Validator
             {
                 public ValidationIssue A() => new ValidationIssue { Description = "my.error" };
-                public ValidationIssue B(ValidationIssue issue)
-                {
-                    issue.Description = "my.error";
-                    return issue;
-                }
+                public ValidationIssue B() => new() { Description = "my.error" };
             }
             """,
             semantic: false
         );
 
         Assert.Contains("new ValidationIssue { CustomTextKey = \"my.error\" }", migrated);
-        Assert.Contains("issue.Description = \"my.error\";", migrated);
+        Assert.Contains("new() { Description = \"my.error\" }", migrated);
         Assert.Contains(result.Warnings, w => w.Contains("(unverified"));
     }
 

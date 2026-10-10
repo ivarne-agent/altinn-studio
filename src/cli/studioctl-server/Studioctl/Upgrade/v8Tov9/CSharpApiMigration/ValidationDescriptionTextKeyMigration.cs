@@ -5,19 +5,20 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Altinn.Studio.Cli.Upgrade.v8Tov9.CSharpApiMigration;
 
 /// <summary>
-/// Moves a text key that app code sets as <c>ValidationIssue.Description</c> to <c>CustomTextKey</c>. The v8 form
-/// looked a description up as a text key; the v9 form shows it as text, so a key left there would show as the key
-/// itself.
+/// Moves a text key that a <c>ValidationIssue</c> object initializer sets as <c>Description</c> to
+/// <c>CustomTextKey</c>. The v8 form looked a description up as a text key; the v9 form shows it as text, so a key
+/// left there would show as the key itself.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A value moves when it is a string constant (a literal or a <c>const</c>) that is the id of one of the app's text
-/// resources. A value that <see cref="TextResourceKeyMigration"/> renamed moves to the new id. A description with a
-/// value only known at run time is listed, since it may be a text key the upgrade cannot see.
+/// Only object initializers are handled. A <c>Description</c> moves when it is a string literal that is the id of one
+/// of the app's text resources. A literal that <see cref="TextResourceKeyMigration"/> renamed moves to the new id. An
+/// initializer that sets <c>CustomTextKey</c> too is left alone with a warning, since v9 only uses
+/// <c>CustomTextKey</c> and the framework sets <c>Description</c> from it.
 /// </para>
 /// <para>
-/// With a semantic model, <c>Description</c> must bind to the SDK's <c>ValidationIssue</c>. Without one, only object
-/// initializers of a type spelled <c>ValidationIssue</c> are moved, and they are reported as unverified.
+/// With a semantic model, <c>Description</c> must bind to the SDK's <c>ValidationIssue</c>. Without one, only
+/// initializers of a type spelled <c>ValidationIssue</c> are handled, and moves are reported as unverified.
 /// </para>
 /// </remarks>
 internal sealed class ValidationDescriptionTextKeyMigration
@@ -30,9 +31,9 @@ internal sealed class ValidationDescriptionTextKeyMigration
         "The v9 form shows a validation issue's Description as text instead of looking it up as a text key. "
         + "Descriptions set to one of the app's text keys now set CustomTextKey:";
 
-    private const string RuntimeSummary =
-        "These validation issues set Description to a value the upgrade cannot read. The v9 form shows it as text; "
-        + "if it is a text key, set CustomTextKey instead:";
+    private const string BothSetSummary =
+        "These validation issues set both Description and CustomTextKey. v9 only uses CustomTextKey for the message, "
+        + "and the framework sets Description from it. Remove Description:";
 
     private readonly CSharpSourceScanner _scanner;
     private readonly IReadOnlySet<string> _textIds;
@@ -52,47 +53,43 @@ internal sealed class ValidationDescriptionTextKeyMigration
     public MigrationResult Migrate()
     {
         var moved = new List<string>();
-        var conflicts = new List<string>();
-        var runtime = new List<string>();
+        var bothSet = new List<string>();
 
         // Snapshot: Update replaces list entries, which would invalidate a live enumerator.
         foreach (var file in _scanner.Files.ToArray())
         {
             var model = file.SemanticModel;
             var moves = new Dictionary<AssignmentExpressionSyntax, string?>();
-            foreach (var assignment in file.Root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+            foreach (var creation in file.Root.DescendantNodes().OfType<BaseObjectCreationExpressionSyntax>())
             {
                 if (
-                    !assignment.IsKind(SyntaxKind.SimpleAssignmentExpression)
-                    || DescriptionNameOf(assignment) is not { } name
-                    || !IsValidationIssueDescription(assignment, name, model)
+                    creation.Initializer is not { } initializer
+                    || !initializer.IsKind(SyntaxKind.ObjectInitializerExpression)
+                    || MemberAssignment(initializer, DescriptionName) is not { } description
+                    || !IsValidationIssueDescription(creation, (IdentifierNameSyntax)description.Left, model)
                 )
                 {
                     continue;
                 }
 
-                var location = $"{file.RelativePath}:{file.GetLine(assignment)}";
-                if (ConstantString(assignment.Right, model) is not { } value)
+                var location = $"{file.RelativePath}:{file.GetLine(description)}";
+                if (MemberAssignment(initializer, CustomTextKeyName) is not null)
                 {
-                    runtime.Add($"{location}: Description = {Shorten(assignment.Right)}");
+                    bothSet.Add(location);
                     continue;
                 }
 
-                if (TextKeyFor(value) is not { } textKey)
+                if (
+                    description.Right is not LiteralExpressionSyntax literal
+                    || !literal.IsKind(SyntaxKind.StringLiteralExpression)
+                    || TextKeyFor(literal.Token.ValueText) is not { } textKey
+                )
                 {
                     continue;
                 }
 
-                if (SetsCustomTextKeyToo(assignment))
-                {
-                    conflicts.Add(
-                        $"{location}: Description is set to the text key '{value}', and CustomTextKey is set too. "
-                            + "The v9 form shows the description as text; remove it or set it to a text"
-                    );
-                    continue;
-                }
-
-                moves[assignment] = textKey == value ? null : textKey;
+                var value = literal.Token.ValueText;
+                moves[description] = textKey == value ? null : textKey;
                 var unverified = model is null ? " (unverified: the app could not be compiled)" : "";
                 moved.Add(
                     textKey == value
@@ -117,62 +114,43 @@ internal sealed class ValidationDescriptionTextKeyMigration
             messages.WarnRange(moved);
         }
 
-        foreach (var conflict in conflicts)
+        if (bothSet.Count > 0)
         {
-            messages.Todo(conflict);
-        }
-
-        if (runtime.Count > 0)
-        {
-            messages.Warn(RuntimeSummary);
-            messages.WarnRange(runtime);
+            messages.Warn(BothSetSummary);
+            messages.WarnRange(bothSet);
         }
 
         return new MigrationResult(messages);
     }
 
     /// <summary>
-    /// The <c>Description</c> name being assigned, in an object initializer or through a member access.
+    /// The initializer's simple assignment to the member with the given name, if any.
     /// </summary>
-    private static IdentifierNameSyntax? DescriptionNameOf(AssignmentExpressionSyntax assignment)
-    {
-        var name = assignment.Left switch
-        {
-            IdentifierNameSyntax identifier when IsObjectInitializerMember(assignment) => identifier,
-            MemberAccessExpressionSyntax { Name: IdentifierNameSyntax memberName } => memberName,
-            _ => null,
-        };
-        return name?.Identifier.Text == DescriptionName ? name : null;
-    }
-
-    private static string Shorten(ExpressionSyntax value)
-    {
-        const int maxLength = 80;
-        var text = string.Join(" ", value.ToString().Split('\n', StringSplitOptions.TrimEntries));
-        return text.Length <= maxLength ? text : text[..(maxLength - 3)] + "...";
-    }
-
-    private static bool IsObjectInitializerMember(AssignmentExpressionSyntax assignment) =>
-        assignment.Parent is InitializerExpressionSyntax initializer
-        && initializer.IsKind(SyntaxKind.ObjectInitializerExpression);
+    private static AssignmentExpressionSyntax? MemberAssignment(InitializerExpressionSyntax initializer, string name) =>
+        initializer
+            .Expressions.OfType<AssignmentExpressionSyntax>()
+            .FirstOrDefault(assignment =>
+                assignment.IsKind(SyntaxKind.SimpleAssignmentExpression)
+                && assignment.Left is IdentifierNameSyntax identifier
+                && identifier.Identifier.Text == name
+            );
 
     private static bool IsValidationIssueDescription(
-        AssignmentExpressionSyntax assignment,
-        IdentifierNameSyntax name,
+        BaseObjectCreationExpressionSyntax creation,
+        IdentifierNameSyntax description,
         SemanticModel? model
     )
     {
         if (model is not null)
         {
-            var info = model.GetSymbolInfo(name);
+            var info = model.GetSymbolInfo(description);
             var symbol = info.Symbol ?? info.CandidateSymbols.FirstOrDefault();
             return symbol is IPropertySymbol { Name: DescriptionName, ContainingType.Name: TypeName }
                 && CSharpSemanticQueries.IsAltinnAppSymbol(symbol);
         }
 
-        // Without a semantic model, only an initializer of a type spelled ValidationIssue is certain enough.
-        return IsObjectInitializerMember(assignment)
-            && assignment.Parent?.Parent is ObjectCreationExpressionSyntax { Type: var type }
+        // Without a semantic model, only an explicit `new ValidationIssue` is certain enough.
+        return creation is ObjectCreationExpressionSyntax { Type: var type }
             && type switch
             {
                 IdentifierNameSyntax identifier => identifier.Identifier.Text == TypeName,
@@ -180,16 +158,6 @@ internal sealed class ValidationDescriptionTextKeyMigration
                 AliasQualifiedNameSyntax aliased => aliased.Name.Identifier.Text == TypeName,
                 _ => false,
             };
-    }
-
-    private static string? ConstantString(ExpressionSyntax value, SemanticModel? model)
-    {
-        if (model?.GetConstantValue(value) is { HasValue: true, Value: string constant })
-            return constant;
-
-        return value is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.StringLiteralExpression)
-            ? literal.Token.ValueText
-            : null;
     }
 
     /// <summary>
@@ -203,28 +171,12 @@ internal sealed class ValidationDescriptionTextKeyMigration
         return _renamedTextIds.TryGetValue(value, out var renamed) && _textIds.Contains(renamed) ? renamed : null;
     }
 
-    private static bool SetsCustomTextKeyToo(AssignmentExpressionSyntax assignment) =>
-        IsObjectInitializerMember(assignment)
-        && ((InitializerExpressionSyntax)assignment.Parent!).Expressions.Any(expression =>
-            expression
-                is AssignmentExpressionSyntax { Left: IdentifierNameSyntax { Identifier.Text: CustomTextKeyName } }
-        );
-
     /// <summary>
     /// Assigns the value to <c>CustomTextKey</c> instead, replacing it with <paramref name="renamedKey"/> when set.
     /// </summary>
     private static AssignmentExpressionSyntax Move(AssignmentExpressionSyntax assignment, string? renamedKey)
     {
-        ExpressionSyntax left = assignment.Left switch
-        {
-            IdentifierNameSyntax identifier => SyntaxFactory
-                .IdentifierName(CustomTextKeyName)
-                .WithTriviaFrom(identifier),
-            MemberAccessExpressionSyntax memberAccess => memberAccess.WithName(
-                SyntaxFactory.IdentifierName(CustomTextKeyName).WithTriviaFrom(memberAccess.Name)
-            ),
-            _ => assignment.Left,
-        };
+        var left = SyntaxFactory.IdentifierName(CustomTextKeyName).WithTriviaFrom(assignment.Left);
         var right = renamedKey is null
             ? assignment.Right
             : SyntaxFactory
