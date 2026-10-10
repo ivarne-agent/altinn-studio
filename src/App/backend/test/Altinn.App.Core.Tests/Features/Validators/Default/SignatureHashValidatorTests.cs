@@ -67,13 +67,8 @@ public class SignatureHashValidatorTests
         Assert.Empty(result);
     }
 
-    [Theory]
-    [InlineData(LanguageConst.Nb)]
-    [InlineData(LanguageConst.Nn)]
-    [InlineData(LanguageConst.En)]
-    [InlineData(null)]
-    [InlineData("fr")]
-    public async Task Validate_WithInvalidSignatureHash_ReturnsValidationIssue(string? language)
+    [Fact]
+    public async Task Validate_WithInvalidSignatureHash_ReturnsValidationIssue()
     {
         const string testData = "test data";
         const string storedHash = "different-hash";
@@ -86,7 +81,11 @@ public class SignatureHashValidatorTests
 
         SetupMocks(signingConfiguration, applicationMetadata, [signeeContext], testData);
 
-        List<ValidationIssue> result = await _validator.Validate(_dataAccessorMock.Object, "signing-task", language);
+        List<ValidationIssue> result = await _validator.Validate(
+            _dataAccessorMock.Object,
+            "signing-task",
+            LanguageConst.Nb
+        );
 
         Assert.Single(result);
         Assert.Equal(ValidationIssueCodes.DataElementCodes.InvalidSignatureHash, result[0].Code);

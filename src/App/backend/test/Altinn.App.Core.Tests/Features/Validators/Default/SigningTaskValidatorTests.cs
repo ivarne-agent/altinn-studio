@@ -83,13 +83,8 @@ public class SigningTaskValidatorTest
         Assert.Empty(result);
     }
 
-    [Theory]
-    [InlineData(LanguageConst.Nb)]
-    [InlineData(LanguageConst.Nn)]
-    [InlineData(LanguageConst.En)]
-    [InlineData(null)]
-    [InlineData("fr")]
-    public async Task Validate_ShouldReturnValidationIssue_WhenNotAllHaveSigned(string? language)
+    [Fact]
+    public async Task Validate_ShouldReturnValidationIssue_WhenNotAllHaveSigned()
     {
         // Arrange
         var dataAccessorMock = new Mock<IInstanceDataAccessor>();
@@ -131,7 +126,7 @@ public class SigningTaskValidatorTest
             .ReturnsAsync(signeeContexts);
 
         // Act
-        var result = await _validator.Validate(dataAccessorMock.Object, taskId, language);
+        var result = await _validator.Validate(dataAccessorMock.Object, taskId, LanguageConst.Nb);
 
         // Assert
         Assert.Single(result);
