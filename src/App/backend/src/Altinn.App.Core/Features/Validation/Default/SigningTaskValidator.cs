@@ -108,6 +108,14 @@ internal sealed class SigningTaskValidator : IValidator
             return [];
         }
 
-        return [BuiltInValidationIssues.MissingSignatures()];
+        return
+        [
+            BuiltInValidationIssues.MissingSignatures(
+                signedCount: signedCount,
+                signeeCount: signeeContextsResult.Count,
+                minCount: signatureDataType.MinCount,
+                dataType: signatureDataType.Id
+            ),
+        ];
     }
 }

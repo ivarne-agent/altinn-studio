@@ -138,6 +138,16 @@ public class SigningTaskValidatorTest
         Assert.Equal(ValidationIssueCodes.DataElementCodes.MissingSignatures, result[0].Code);
         Assert.Equal("backend.validation_errors.missing_signatures", result[0].CustomTextKey);
         Assert.Null(result[0].Description);
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["signedCount"] = "0",
+                ["signeeCount"] = "1",
+                ["minCount"] = "1",
+                ["dataType"] = "signatures",
+            },
+            result[0].CustomTextParameters
+        );
     }
 
     [Fact]

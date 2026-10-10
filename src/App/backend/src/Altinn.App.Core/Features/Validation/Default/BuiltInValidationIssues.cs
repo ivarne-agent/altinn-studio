@@ -208,11 +208,27 @@ internal static class BuiltInValidationIssues
                 nn: "Det manglar påkravde signaturar.",
                 en: "Required signatures are missing."
             ),
+            CustomTextParameters =
+            [
+                new("signedCount", "Number of signees who have signed."),
+                new("signeeCount", "Number of signees for the task."),
+                new("minCount", "Smallest number of signatures the signature data type requires."),
+                new("dataType", "Id of the signature data type."),
+            ],
         },
     };
 
-    public static ValidationIssue MissingSignatures() =>
-        MissingSignaturesDefinition.Create(dataElementId: null, field: null, []);
+    public static ValidationIssue MissingSignatures(int signedCount, int signeeCount, int minCount, string dataType) =>
+        MissingSignaturesDefinition.Create(
+            dataElementId: null,
+            field: null,
+            [
+                signedCount.ToString(CultureInfo.InvariantCulture),
+                signeeCount.ToString(CultureInfo.InvariantCulture),
+                minCount.ToString(CultureInfo.InvariantCulture),
+                dataType,
+            ]
+        );
 
     public static readonly ValidationIssueDefinition InvalidSignatureHashDefinition = new()
     {

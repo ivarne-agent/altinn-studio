@@ -9,7 +9,7 @@
 | `DataElementFileScanPending` | Error | `backend.validation_errors.file_scan_pending` | `filename`, `dataType` |
 | `TooManyDataElementsOfType` | Error | `backend.validation_errors.too_many_data_elements` | `maxCount`, `dataType` |
 | `TooFewDataElementsOfType` | Error | `backend.validation_errors.too_few_data_elements` | `minCount`, `dataType` |
-| `MissingSignatures` | Error | `backend.validation_errors.missing_signatures` | none |
+| `MissingSignatures` | Error | `backend.validation_errors.missing_signatures` | `signedCount`, `signeeCount`, `minCount`, `dataType` |
 | `InvalidSignatureHash` | Error | `backend.validation_errors.invalid_signature_hash` | `dataElementId`, `filename`, `dataType` |
 | `required` | Error | `backend.validation_errors.required` | `field`, `layoutId`, `pageId`, `componentId`, `bindingName`, `pageName`, `componentTitle` |
 | `Xsd` | Error | `backend.xsd_validation` | `schema`, `message` |
@@ -147,6 +147,13 @@ Code `MissingSignatures`, severity Error.
 | nb | Det mangler påkrevde signaturer. |
 | nn | Det manglar påkravde signaturar. |
 | en | Required signatures are missing. |
+
+| Custom text parameter | Description |
+|---|---|
+| `signedCount` | Number of signees who have signed. |
+| `signeeCount` | Number of signees for the task. |
+| `minCount` | Smallest number of signatures the signature data type requires. |
+| `dataType` | Id of the signature data type. |
 
 ## `backend.validation_errors.invalid_signature_hash`
 
