@@ -12,9 +12,9 @@ namespace Altinn.Studio.Cli.Upgrade.v8Tov9.CSharpApiMigration;
 /// <remarks>
 /// <para>
 /// Only object initializers are handled. A <c>Description</c> moves when it is a string literal that is the id of one
-/// of the app's text resources. A literal that <see cref="TextResourceKeyMigration"/> renamed moves to the new id. An
-/// initializer that sets <c>CustomTextKey</c> too is left alone with a warning, since v9 only uses
-/// <c>CustomTextKey</c> and the framework sets <c>Description</c> from it.
+/// of the app's text resources. A literal that <see cref="TextResourceKeyMigration"/> renamed moves to the new id.
+/// v9 only uses <c>CustomTextKey</c> when both are set, and the framework sets <c>Description</c> from it. So when an
+/// initializer sets both to the same value, <c>Description</c> is removed; otherwise it is left with a warning.
 /// </para>
 /// <para>
 /// With a semantic model, <c>Description</c> must bind to the SDK's <c>ValidationIssue</c>. Without one, only
@@ -30,6 +30,10 @@ internal sealed class ValidationDescriptionTextKeyMigration
     private const string MovedSummary =
         "The v9 form shows a validation issue's Description as text instead of looking it up as a text key. "
         + "Descriptions set to one of the app's text keys now set CustomTextKey:";
+
+    private const string RemovedSummary =
+        "These validation issues set Description to the same value as CustomTextKey. v9 only uses CustomTextKey for "
+        + "the message, and the framework sets Description from it, so Description was removed:";
 
     private const string BothSetSummary =
         "These validation issues set both Description and CustomTextKey. v9 only uses CustomTextKey for the message, "
@@ -53,13 +57,15 @@ internal sealed class ValidationDescriptionTextKeyMigration
     public MigrationResult Migrate()
     {
         var moved = new List<string>();
+        var removed = new List<string>();
         var bothSet = new List<string>();
 
         // Snapshot: Update replaces list entries, which would invalidate a live enumerator.
         foreach (var file in _scanner.Files.ToArray())
         {
             var model = file.SemanticModel;
-            var moves = new Dictionary<AssignmentExpressionSyntax, string?>();
+            // Per initializer: remove Description, or move it to CustomTextKey with an optional renamed key.
+            var edits = new Dictionary<InitializerExpressionSyntax, (bool Remove, string? RenamedKey)>();
             foreach (var creation in file.Root.DescendantNodes().OfType<BaseObjectCreationExpressionSyntax>())
             {
                 if (
@@ -73,9 +79,18 @@ internal sealed class ValidationDescriptionTextKeyMigration
                 }
 
                 var location = $"{file.RelativePath}:{file.GetLine(description)}";
-                if (MemberAssignment(initializer, CustomTextKeyName) is not null)
+                if (MemberAssignment(initializer, CustomTextKeyName) is { } customTextKey)
                 {
-                    bothSet.Add(location);
+                    if (SyntaxFactory.AreEquivalent(description.Right, customTextKey.Right))
+                    {
+                        edits[initializer] = (Remove: true, RenamedKey: null);
+                        removed.Add(location);
+                    }
+                    else
+                    {
+                        bothSet.Add(location);
+                    }
+
                     continue;
                 }
 
@@ -89,7 +104,7 @@ internal sealed class ValidationDescriptionTextKeyMigration
                 }
 
                 var value = literal.Token.ValueText;
-                moves[description] = textKey == value ? null : textKey;
+                edits[initializer] = (Remove: false, RenamedKey: textKey == value ? null : textKey);
                 var unverified = model is null ? " (unverified: the app could not be compiled)" : "";
                 moved.Add(
                     textKey == value
@@ -98,12 +113,18 @@ internal sealed class ValidationDescriptionTextKeyMigration
                 );
             }
 
-            if (moves.Count == 0)
+            if (edits.Count == 0)
             {
                 continue;
             }
 
-            var updated = file.Root.ReplaceNodes(moves.Keys, (original, rewritten) => Move(rewritten, moves[original]));
+            var updated = file.Root.ReplaceNodes(
+                edits.Keys,
+                (original, rewritten) =>
+                    edits[original] is { Remove: true }
+                        ? RemoveDescription(rewritten)
+                        : MoveDescription(rewritten, edits[original].RenamedKey)
+            );
             _scanner.Update(file, updated);
         }
 
@@ -112,6 +133,12 @@ internal sealed class ValidationDescriptionTextKeyMigration
         {
             messages.Warn(MovedSummary);
             messages.WarnRange(moved);
+        }
+
+        if (removed.Count > 0)
+        {
+            messages.Warn(RemovedSummary);
+            messages.WarnRange(removed);
         }
 
         if (bothSet.Count > 0)
@@ -172,16 +199,42 @@ internal sealed class ValidationDescriptionTextKeyMigration
     }
 
     /// <summary>
-    /// Assigns the value to <c>CustomTextKey</c> instead, replacing it with <paramref name="renamedKey"/> when set.
+    /// Assigns the Description value to <c>CustomTextKey</c> instead, replacing it with <paramref name="renamedKey"/>
+    /// when set.
     /// </summary>
-    private static AssignmentExpressionSyntax Move(AssignmentExpressionSyntax assignment, string? renamedKey)
+    private static InitializerExpressionSyntax MoveDescription(
+        InitializerExpressionSyntax initializer,
+        string? renamedKey
+    )
     {
+        var assignment = MemberAssignment(initializer, DescriptionName)!;
         var left = SyntaxFactory.IdentifierName(CustomTextKeyName).WithTriviaFrom(assignment.Left);
         var right = renamedKey is null
             ? assignment.Right
             : SyntaxFactory
                 .LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(renamedKey))
                 .WithTriviaFrom(assignment.Right);
-        return assignment.WithLeft(left).WithRight(right);
+        return initializer.ReplaceNode(assignment, assignment.WithLeft(left).WithRight(right));
+    }
+
+    /// <summary>
+    /// Removes the Description assignment, with its comma, keeping the layout of the members around it.
+    /// </summary>
+    private static InitializerExpressionSyntax RemoveDescription(InitializerExpressionSyntax initializer)
+    {
+        var expressions = initializer.Expressions;
+        var index = expressions.IndexOf(MemberAssignment(initializer, DescriptionName)!);
+        var removed = expressions[index];
+        var remaining = expressions.RemoveAt(index);
+
+        // The last member's trailing trivia (such as the space before the closing brace) goes with it, so give it
+        // to the member that is now last.
+        if (index == expressions.Count - 1 && remaining.Count > 0 && expressions.SeparatorCount < expressions.Count)
+        {
+            var last = remaining[^1];
+            remaining = remaining.Replace(last, last.WithTrailingTrivia(removed.GetTrailingTrivia()));
+        }
+
+        return initializer.WithExpressions(remaining);
     }
 }

@@ -144,6 +144,68 @@ public sealed class ValidationDescriptionTextKeyMigrationTests : IDisposable
         Assert.Contains(result.Warnings, w => w.EndsWith("Validator.cs:5", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData(
+        "new ValidationIssue { Description = \"my.error\", CustomTextKey = \"my.error\" }",
+        "new ValidationIssue { CustomTextKey = \"my.error\" }"
+    )]
+    [InlineData(
+        "new ValidationIssue { CustomTextKey = \"my.error\", Description = \"my.error\" }",
+        "new ValidationIssue { CustomTextKey = \"my.error\" }"
+    )]
+    [InlineData(
+        "new ValidationIssue { Field = \"a\", Description = key, CustomTextKey = key }",
+        "new ValidationIssue { Field = \"a\", CustomTextKey = key }"
+    )]
+    public async Task Removes_Description_when_it_repeats_CustomTextKey(string before, string after)
+    {
+        var (migrated, result) = await Migrate(
+            $$"""
+            using Altinn.App.Core.Models.Validation;
+            public class Validator
+            {
+                public ValidationIssue Run(string key) => {{before}};
+            }
+            """
+        );
+
+        Assert.Contains(after, migrated);
+        Assert.False(result.RequiresManualFollowUp);
+        Assert.Contains(result.Warnings, w => w.Contains("so Description was removed"));
+        Assert.Contains(result.Warnings, w => w.EndsWith("Validator.cs:4", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Removes_a_repeated_Description_on_its_own_line()
+    {
+        var (migrated, _) = await Migrate(
+            """
+            using Altinn.App.Core.Models.Validation;
+            public class Validator
+            {
+                public ValidationIssue Run() =>
+                    new ValidationIssue
+                    {
+                        Field = "a",
+                        Description = "my.error",
+                        CustomTextKey = "my.error",
+                    };
+            }
+            """
+        );
+
+        Assert.Contains(
+            """
+                    new ValidationIssue
+                    {
+                        Field = "a",
+                        CustomTextKey = "my.error",
+                    };
+            """,
+            migrated
+        );
+    }
+
     [Fact]
     public async Task Leaves_the_apps_own_types()
     {
