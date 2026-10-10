@@ -4,7 +4,7 @@ import { Paragraph } from '@digdir/designsystemet-react';
 import type { ValidLanguageKey } from '@app/language';
 
 import { useLanguage } from 'src/features/language/useLanguage';
-import type { ValidLangParam } from 'src/features/language/useLanguage';
+import type { TextReference, ValidLangParam } from 'src/features/language/useLanguage';
 
 export interface LangProps {
   id: ValidLanguageKey | string | undefined;
@@ -23,6 +23,20 @@ export function Lang({ id, params, customTextParameters, fallback, parseHtmlAndM
   }
 
   return lang(id, params, customTextParameters, fallback);
+}
+
+/**
+ * Renders a text reference, such as a validation message, with its parameters and fallback.
+ */
+export function LangReference({ reference }: { reference: TextReference }) {
+  return (
+    <Lang
+      id={reference.key}
+      params={reference.params}
+      customTextParameters={reference.customTextParameters}
+      fallback={reference.fallback}
+    />
+  );
 }
 
 /**

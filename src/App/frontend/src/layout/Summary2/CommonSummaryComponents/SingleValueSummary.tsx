@@ -1,9 +1,10 @@
 import React from 'react';
 
-import { Label, Paragraph, ValidationMessage } from '@digdir/designsystemet-react';
+import { Label, Paragraph } from '@digdir/designsystemet-react';
 import cn from 'classnames';
 
 import { Lang } from 'src/features/language/Lang';
+import { ValidationMessageList } from 'src/features/validation/ValidationMessageList';
 import { EditButton } from 'src/layout/Summary2/CommonSummaryComponents/EditButton';
 import classes from 'src/layout/Summary2/CommonSummaryComponents/SingleValueSummary.module.css';
 import type { BaseValidation } from 'src/features/validation';
@@ -65,20 +66,9 @@ export const SingleValueSummary = ({
       )}
     </div>
 
-    {errors &&
-      errors?.length > 0 &&
-      errors?.map(({ message }) => (
-        <ValidationMessage
-          key={message.key ?? message.fallback}
-          data-size='sm'
-        >
-          <Lang
-            id={message.key}
-            customTextParameters={message.customTextParameters}
-            fallback={message.fallback}
-            params={message.params}
-          />
-        </ValidationMessage>
-      ))}
+    <ValidationMessageList
+      validations={errors}
+      size='sm'
+    />
   </div>
 );
