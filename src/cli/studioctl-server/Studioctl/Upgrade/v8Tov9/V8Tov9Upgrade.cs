@@ -1108,7 +1108,8 @@ internal static class V8Tov9Upgrade
 
     /// <summary>
     /// Moves text keys that app code sets as a validation issue's Description to CustomTextKey, since the v9 form
-    /// shows the description as text.
+    /// shows the description as text, and removes a Description that repeats CustomTextKey, in ValidationIssue
+    /// initializers and GenericFormDataValidator.CreateValidationIssue calls.
     /// </summary>
     static async Task<int> MigrateValidationDescriptionTextKeys(CSharpSourceScanner scanner, string projectFolder)
     {
@@ -1121,10 +1122,11 @@ internal static class V8Tov9Upgrade
                 rename => rename.New,
                 StringComparer.Ordinal
             );
-            var result = new ValidationDescriptionTextKeyMigration(scanner, textIds, renamedTextIds).Migrate();
+            var initializers = new ValidationDescriptionTextKeyMigration(scanner, textIds, renamedTextIds).Migrate();
+            var calls = new CreateValidationIssueDescriptionMigration(scanner).Migrate();
             return ReportMigrationResult(
-                result,
-                cleanText: "No validation issue sets Description to a text key",
+                new MigrationResult([.. initializers.Messages, .. calls.Messages]),
+                cleanText: "No validation issue sets Description to a text key or next to CustomTextKey",
                 cleanStatus: UpgradeMessageStatus.Skip
             );
         }

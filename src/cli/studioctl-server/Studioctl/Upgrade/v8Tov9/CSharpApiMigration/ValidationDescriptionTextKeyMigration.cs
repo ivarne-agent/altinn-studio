@@ -220,21 +220,31 @@ internal sealed class ValidationDescriptionTextKeyMigration
     /// <summary>
     /// Removes the Description assignment, with its comma, keeping the layout of the members around it.
     /// </summary>
-    private static InitializerExpressionSyntax RemoveDescription(InitializerExpressionSyntax initializer)
-    {
-        var expressions = initializer.Expressions;
-        var index = expressions.IndexOf(MemberAssignment(initializer, DescriptionName)!);
-        var removed = expressions[index];
-        var remaining = expressions.RemoveAt(index);
+    private static InitializerExpressionSyntax RemoveDescription(InitializerExpressionSyntax initializer) =>
+        initializer.WithExpressions(
+            RemoveKeepingLayout(
+                initializer.Expressions,
+                initializer.Expressions.IndexOf(MemberAssignment(initializer, DescriptionName)!)
+            )
+        );
 
-        // The last member's trailing trivia (such as the space before the closing brace) goes with it, so give it
-        // to the member that is now last.
-        if (index == expressions.Count - 1 && remaining.Count > 0 && expressions.SeparatorCount < expressions.Count)
+    /// <summary>
+    /// Removes the item at <paramref name="index"/> with its comma, keeping the layout of the items around it.
+    /// </summary>
+    internal static SeparatedSyntaxList<TNode> RemoveKeepingLayout<TNode>(SeparatedSyntaxList<TNode> list, int index)
+        where TNode : SyntaxNode
+    {
+        var removed = list[index];
+        var remaining = list.RemoveAt(index);
+
+        // Without a trailing comma, the last item's trailing trivia (such as the space before a closing brace) goes
+        // with it, so give it to the item that is now last.
+        if (index == list.Count - 1 && remaining.Count > 0 && list.SeparatorCount < list.Count)
         {
             var last = remaining[^1];
             remaining = remaining.Replace(last, last.WithTrailingTrivia(removed.GetTrailingTrivia()));
         }
 
-        return initializer.WithExpressions(remaining);
+        return remaining;
     }
 }
