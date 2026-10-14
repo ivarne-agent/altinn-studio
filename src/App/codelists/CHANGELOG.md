@@ -9,6 +9,10 @@ Section ordering: Added, Changed, Fixed, Removed, Security, Deprecated.
 
 ## [Unreleased]
 
+### Changed
+
+- Breaking: Altinn.Codelists requires `Altinn.App.Core` 9.0.0-preview.8 or later. Upgrade the app libraries in your app before taking this version. ([#19774](https://github.com/Altinn/altinn-studio/issues/19774))
+
 ## [9.0.0-preview.1] - 2026-09-09
 
 ### Changed
