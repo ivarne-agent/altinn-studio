@@ -30,11 +30,16 @@ type Resetter interface {
 
 // UpOptions configures environment startup.
 type UpOptions struct {
+	// DevComponents names localtest-v2 components to build from the research checkout
+	// (EnvLocaltestV2Source) instead of pulling.
+	DevComponents     []string
 	Detach            bool
 	DevWorkflowEngine bool
-	Monitoring        bool
-	OpenBrowser       bool
-	PgAdmin           bool
+	// LatestImages runs the localtest-v2 images at "latest" instead of the pinned build.
+	LatestImages bool
+	Monitoring   bool
+	OpenBrowser  bool
+	PgAdmin      bool
 }
 
 // LogsOptions configures log streaming.

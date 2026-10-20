@@ -139,6 +139,11 @@ Altinn Studio platform components.
   `http://localhost:9090`.
 - `studioctl run --dev-frontend` serves frontend assets from the current monorepo checkout while the app frontend
   development server is running.
+- `studioctl env up -r localtest-v2` runs the production platform services (Register, Authentication, the PDP,
+  Access Management, Storage, Events) instead of localtest's emulation; `studioctl run` works the same against it.
+  Only one runtime runs at a time, and the other `env` commands follow the one last started. `--latest` runs the
+  newest images, and `--dev <component>` builds one from `STUDIOCTL_LOCALTEST_V2_SRC` (the localtest-research
+  checkout's `localtest/` folder).
 
 ## Stop
 

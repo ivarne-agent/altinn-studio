@@ -11,6 +11,9 @@ Section ordering: Added, Changed, Fixed, Removed, Security, Deprecated.
 
 ### Added
 
+- `studioctl env up -r localtest-v2` runs the platform's own services (Register, Authentication, authorization, Access Management, Storage and Events) instead of localtest's emulation of them. Apps run unchanged; studioctl deploys each app to the platform when it starts and serves `http://local.altinn.cloud:8000` itself. The images are pinned; `--latest` follows the newest build, and `--dev <component>` builds one from a checkout of the localtest-research repository.
+- `studioctl env down`, `env status`, `env logs` and `env reset` act on the runtime the last `env up` started, so `-r` is only needed to pick another one.
+
 - `studioctl app upgrade v9` reports classes that implement the removed `IProcessEnd`, and their registrations, and points to `IOnProcessEndedHandler` instead. ([#21014](https://github.com/Altinn/altinn-studio/issues/21014))
 - `studioctl app upgrade v9` removes the `JsonObjectInDataResponse` feature flag from the appsettings files, and points out when it was off, since clients of the data API then get validation issues as JSON instead of text. ([#21166](https://github.com/Altinn/altinn-studio/pull/21166))
 

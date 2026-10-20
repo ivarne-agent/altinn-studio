@@ -16,6 +16,23 @@ type appEnv struct {
 	values map[string]string
 }
 
+// accessTokenSigning is the certificate an app signs its platform access tokens with. The localtest
+// runtime never checked those tokens, so a run against it sets nothing; the localtest-v2 components
+// validate them, so a run against that runtime gets the shared test certificate.
+//
+// Two generations of Altinn.Common.AccessTokenClient read the settings differently: 3.x (app-lib v8)
+// opens FullPath, and 1.x (the v9 backend) concatenates the parent of the working directory, KeysFolder
+// and FileName without separators, so KeysFolder is a path that resolves from there.
+type accessTokenSigning struct {
+	FullPath   string
+	KeysFolder string
+	FileName   string
+}
+
+func (a accessTokenSigning) isZero() bool {
+	return a.FullPath == ""
+}
+
 // newAppRunEnv builds the environment an app is started with. secretsDir is required - every run is given a
 // secrets directory, and the caller has created it by now; keysDir is set only where studioctl decides where
 // the data-protection keys go.
@@ -26,9 +43,10 @@ func newAppRunEnv(
 	appFrontendAssetBaseUrl string,
 	secretsDir string,
 	keysDir string,
+	signing accessTokenSigning,
 ) []string {
 	env := newAppEnv(current)
-	env.addRunDefaults(kestrelURL, topology, appFrontendAssetBaseUrl, secretsDir, keysDir)
+	env.addRunDefaults(kestrelURL, topology, appFrontendAssetBaseUrl, secretsDir, keysDir, signing)
 	return env.entries()
 }
 
@@ -52,6 +70,7 @@ func (e appEnv) addRunDefaults(
 	appFrontendAssetBaseUrl string,
 	secretsDir string,
 	keysDir string,
+	signing accessTokenSigning,
 ) {
 	endpoints := newAppEndpointConfig(topology)
 
@@ -94,6 +113,11 @@ func (e appEnv) addRunDefaults(
 	e.setDefault("PlatformSettings__ApiCorrespondenceEndpoint", endpoints.platform+"/correspondence/api/v1/")
 	e.setDefault("PlatformSettings__ApiAccessManagementEndpoint", endpoints.platform+"/accessmanagement/api/v1/")
 	e.setDefault("PlatformSettings__ApiWorkflowEngineEndpoint", endpoints.workflowEngine)
+	if !signing.isZero() {
+		e.setDefault("AccessTokenSettings__AccessTokenSigningCertificateFullPath", signing.FullPath)
+		e.setDefault("AccessTokenSettings__AccessTokenSigningKeysFolder", signing.KeysFolder)
+		e.setDefault("AccessTokenSettings__AccessTokenSigningCertificateFileName", signing.FileName)
+	}
 }
 
 func (e appEnv) setDefault(key, value string) {

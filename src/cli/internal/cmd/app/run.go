@@ -18,6 +18,7 @@ import (
 	"altinn.studio/studioctl/internal/cmd/env/localtest/components"
 	repocontext "altinn.studio/studioctl/internal/context"
 	"altinn.studio/studioctl/internal/envtopology"
+	"altinn.studio/studioctl/internal/localtestv2"
 	"altinn.studio/studioctl/internal/osutil"
 )
 
@@ -130,6 +131,10 @@ func (s *Service) BuildDotnetRunSpec(
 	if err := s.provisionAppSecrets(secretsDir); err != nil {
 		return DotnetRunSpec{}, err
 	}
+	signing, signingErr := s.nativeAccessTokenSigning(appPath)
+	if signingErr != nil {
+		return DotnetRunSpec{}, signingErr
+	}
 
 	return DotnetRunSpec{
 		Dir:            filepath.Dir(projectPath),
@@ -140,8 +145,55 @@ func (s *Service) BuildDotnetRunSpec(
 		AppArgs:        args,
 		BuildArgs:      []string{"build", projectPath},
 		TargetPathArgs: []string{"msbuild", projectPath, "-getProperty:TargetPath"},
-		Env:            newAppRunEnv(env, baseURL, topology, opts.AppFrontendAssetBaseUrl, secretsDir, ""),
+		Env:            newAppRunEnv(env, baseURL, topology, opts.AppFrontendAssetBaseUrl, secretsDir, "", signing),
 	}, nil
+}
+
+// nativeAccessTokenSigning points a process run at the localtest-v2 certificate, or at nothing when that
+// runtime is not up. KeysFolder is a traversal from the app root (the parent of the App/ working
+// directory) to the certificate directory, which is what the 1.x client resolves.
+func (s *Service) nativeAccessTokenSigning(appPath string) (accessTokenSigning, error) {
+	state, up, err := localtestv2.ReadState(s.cfg)
+	if err != nil {
+		return accessTokenSigning{}, fmt.Errorf("read localtest-v2 state: %w", err)
+	}
+	if !up {
+		return noAccessTokenSigning(), nil
+	}
+	appRoot, err := filepath.Abs(appPath)
+	if err != nil {
+		return accessTokenSigning{}, fmt.Errorf("resolve app path: %w", err)
+	}
+	rel, err := filepath.Rel(appRoot, state.CertificateDir)
+	if err != nil {
+		return accessTokenSigning{}, fmt.Errorf("relate certificate directory to app: %w", err)
+	}
+	return accessTokenSigning{
+		FullPath:   state.CertificatePath(),
+		KeysFolder: "/" + filepath.ToSlash(rel) + "/",
+		FileName:   localtestv2.CertificateFileName,
+	}, nil
+}
+
+func noAccessTokenSigning() accessTokenSigning {
+	return accessTokenSigning{FullPath: "", KeysFolder: "", FileName: ""}
+}
+
+// containerAccessTokenSigning mounts the localtest-v2 certificate into an app container at a fixed
+// path, or mounts nothing when that runtime is not up.
+func (s *Service) containerAccessTokenSigning() (accessTokenSigning, string, error) {
+	state, up, err := localtestv2.ReadState(s.cfg)
+	if err != nil {
+		return accessTokenSigning{}, "", fmt.Errorf("read localtest-v2 state: %w", err)
+	}
+	if !up {
+		return noAccessTokenSigning(), "", nil
+	}
+	return accessTokenSigning{
+		FullPath:   containerCertificateDir + "/" + localtestv2.CertificateFileName,
+		KeysFolder: containerCertificateDir + "/",
+		FileName:   localtestv2.CertificateFileName,
+	}, state.CertificateDir, nil
 }
 
 // ReadAppID returns the app id declared in an app directory's application metadata. Exported because
@@ -240,6 +292,10 @@ func (s *Service) BuildDockerRunSpec(
 	if keysDir != "" {
 		keysDirEnv = ContainerKeysDir
 	}
+	signing, certificateDir, signingErr := s.containerAccessTokenSigning()
+	if signingErr != nil {
+		return DockerRunSpec{}, signingErr
+	}
 
 	return DockerRunSpec{
 		SecretsDir: secretsDir,
@@ -256,7 +312,7 @@ func (s *Service) BuildDockerRunSpec(
 			RestartPolicy:  "",
 			ExtraHosts:     nil,
 			NetworkAliases: nil,
-			Volumes:        appMounts(secretsDir, keysDir),
+			Volumes:        appMounts(secretsDir, keysDir, certificateDir),
 			Networks: []string{
 				components.NetworkName,
 			},
@@ -277,6 +333,7 @@ func (s *Service) BuildDockerRunSpec(
 				opts.AppFrontendAssetBaseUrl,
 				appsecrets.ContainerDir,
 				keysDirEnv,
+				signing,
 			),
 			Command: args,
 			CapAdd:  nil,
@@ -310,7 +367,10 @@ func (s *Service) PrepareDockerRun(spec *DockerRunSpec, toolchain types.Containe
 // always there - every run has a secrets directory - while the keys mount depends on studioctl having
 // somewhere to persist them. The secrets directory is mounted rather than the file, so that a client stored
 // while the container runs - an atomic replace on the host - is seen inside it.
-func appMounts(secretsDir, keysDir string) []types.VolumeMount {
+// containerCertificateDir is where an app container finds the localtest-v2 certificate.
+const containerCertificateDir = "/certs"
+
+func appMounts(secretsDir, keysDir, certificateDir string) []types.VolumeMount {
 	mounts := []types.VolumeMount{
 		{
 			HostPath:       secretsDir,
@@ -327,6 +387,15 @@ func appMounts(secretsDir, keysDir string) []types.VolumeMount {
 			Type:           types.VolumeMountTypeBind,
 			SELinuxRelabel: types.SELinuxRelabelNone,
 			ReadOnly:       false,
+		})
+	}
+	if certificateDir != "" {
+		mounts = append(mounts, types.VolumeMount{
+			HostPath:       certificateDir,
+			ContainerPath:  containerCertificateDir,
+			Type:           types.VolumeMountTypeBind,
+			SELinuxRelabel: types.SELinuxRelabelNone,
+			ReadOnly:       true,
 		})
 	}
 	return mounts

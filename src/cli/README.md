@@ -75,10 +75,10 @@ and all, is accepted as input.
 - `studioctl app env`: print local app harness environment as KEY=value text (`--json` for JSON output)
 - `studioctl app maskinporten`: store the Maskinporten client the app uses for local runs (`set`, `show`, `remove`)
 - `studioctl agent skills`: list, locate, and install Agent Skills distributed with studioctl
-- `studioctl env up`: start localtest
-- `studioctl env down`: stop localtest
+- `studioctl env up`: start the local environment (`-r localtest`, the default, or `-r localtest-v2`)
+- `studioctl env down`: stop the local environment
 - `studioctl env status`: show runtime/container status
-- `studioctl env logs`: stream logs from localtest containers
+- `studioctl env logs`: stream logs from the environment's containers
 - `studioctl run`: alias for `studioctl app run`
 - `studioctl doctor`: diagnose prerequisites and environment issues
 
@@ -99,6 +99,36 @@ To run a specific build instead, set the matching variable for the session:
 STUDIOCTL_IMAGE_WORKFLOW_ENGINE=ghcr.io/altinn/altinn-studio/runtime-workflow-engine-app:a45a743b78 \
   studioctl env up
 ```
+
+## localtest-v2: the platform's own services
+
+`studioctl env up -r localtest-v2` runs the production platform services instead of localtest's
+emulation of them: Register (which also answers Profile), Authentication, the PDP, Access
+Management, Storage and Events, built from the
+[localtest-research](https://github.com/ivarne-agent/localtest-research) repository with small
+local stand-ins for Azure, plus a localtest app for the test-user login and the token helpers, a
+shared Postgres, and the same PDF generator and workflow engine as `localtest`. Apps run exactly as
+before: `studioctl run` gives them the same platform URLs, and studioctl-server serves
+`http://local.altinn.cloud:8000` itself, forwarding each platform prefix to the component behind it
+and `/{org}/{app}` to the app. When an app starts, studioctl-server deploys it to the platform the
+way Altinn Studio does: application metadata and texts to Storage, the authorization policy to the
+PDP, and the app's `testData.json` users to the Register.
+
+Only one runtime runs at a time. `env up` records which one it started, and `env down`, `env status`,
+`env logs` and `env reset` act on that one unless `-r` says otherwise.
+
+The localtest-v2 images are pinned to one build; `--latest` follows every build on the research
+repository's main branch, `STUDIOCTL_LOCALTEST_V2_TAG` names another build, and
+`STUDIOCTL_IMAGE_LOCALTEST_V2_<COMPONENT>` pins one image. To run a component from a checkout of the
+research repository, point `STUDIOCTL_LOCALTEST_V2_SRC` at its `localtest/` folder and build it:
+
+```sh
+STUDIOCTL_LOCALTEST_V2_SRC=~/code/localtest-research/localtest \
+  studioctl env up -r localtest-v2 --dev storage --dev events   # or --dev all
+```
+
+Not in localtest-v2 yet: Notifications and Correspondence (their prefixes answer 404), the
+monitoring stack and pgAdmin, container-mode apps (`run --mode container`), and `doctor` checks.
 
 ## Install from source (for contributors)
 

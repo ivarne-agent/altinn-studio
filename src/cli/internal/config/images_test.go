@@ -127,3 +127,23 @@ func TestShortImageID(t *testing.T) {
 		})
 	}
 }
+
+func TestLocaltestV2ImagesArePinnedUnlessTold(t *testing.T) {
+	t.Parallel()
+	images := config.DefaultImages()
+	for _, spec := range images.LocaltestV2.All() {
+		if spec.Floating || spec.Tag == "latest" {
+			t.Errorf("%s: pinned by default, got tag %q floating %v", spec.Image, spec.Tag, spec.Floating)
+		}
+	}
+	images.LocaltestV2.UseTag("latest")
+	for _, spec := range images.LocaltestV2.All() {
+		if !spec.Floating || spec.Tag != "latest" {
+			t.Errorf("%s: latest must float, got tag %q floating %v", spec.Image, spec.Tag, spec.Floating)
+		}
+	}
+	images.LocaltestV2.UseTag("sha-abc1234")
+	if images.LocaltestV2.Storage.Floating {
+		t.Error("a named build does not float")
+	}
+}
