@@ -24,10 +24,41 @@ export function AppHeaderMenu({ logoColor }: AppHeaderMenuProps) {
   const userParty = useProfile()?.party;
   const onBehalfOf = useGetOnBehalfOf();
 
+  const logoutUrl = logoutUrlAltinn();
+
   const displayName = userParty?.name + (onBehalfOf ? ` for ${onBehalfOf.name}` : '');
 
   if (!userParty && !onBehalfOf) {
     return <div style={{ height: 40 }} />;
+  }
+
+  const icon = (
+    <CircleIcon
+      size='1.5rem'
+      color={logoColor}
+    >
+      {onBehalfOf?.orgNumber ? (
+        <Buildings3Icon
+          color='white'
+          aria-hidden='true'
+        />
+      ) : (
+        <PersonIcon
+          color='white'
+          aria-hidden='true'
+        />
+      )}
+    </CircleIcon>
+  );
+
+  // The menu holds only the logout link, which exists when its URL is configured; without it there is no menu.
+  if (!logoutUrl) {
+    return (
+      <>
+        <span className={classes.partyName}>{displayName}</span>
+        {icon}
+      </>
+    );
   }
 
   return (
@@ -41,22 +72,7 @@ export function AppHeaderMenu({ logoColor }: AppHeaderMenuProps) {
           onClick={() => setIsOpen((o) => !o)}
           className={cn({ [classes.buttonActive]: isOpen })}
         >
-          <CircleIcon
-            size='1.5rem'
-            color={logoColor}
-          >
-            {onBehalfOf?.orgNumber ? (
-              <Buildings3Icon
-                color='white'
-                aria-hidden='true'
-              />
-            ) : (
-              <PersonIcon
-                color='white'
-                aria-hidden='true'
-              />
-            )}
-          </CircleIcon>
+          {icon}
         </Dropdown.Trigger>
         <Dropdown
           data-testid='app-header-menu'
@@ -71,7 +87,7 @@ export function AppHeaderMenu({ logoColor }: AppHeaderMenuProps) {
                 variant='tertiary'
                 asChild
               >
-                <a href={logoutUrlAltinn()}>
+                <a href={logoutUrl}>
                   <Lang id='general.log_out' />
                 </a>
               </Button>

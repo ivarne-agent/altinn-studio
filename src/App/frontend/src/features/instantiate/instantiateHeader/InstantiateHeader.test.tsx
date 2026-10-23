@@ -40,6 +40,27 @@ describe('InstantiateHeader', () => {
     expect(screen.queryByText(/alle skjema/i)).not.toBeInTheDocument();
   });
 
+  it('links the inbox and the profile to the configured URLs', async () => {
+    await render();
+
+    expect(screen.getByRole('link', { name: /innboks/i })).toHaveAttribute(
+      'href',
+      'https://am.ui.tt02.altinn.no/accessmanagement/api/v1/reportee/changeandredirect?partyId=12345&goTo=https%3A%2F%2Faf.tt02.altinn.no%2F',
+    );
+    expect(screen.getByRole('link', { name: /profil/i })).toHaveAttribute('href', 'https://af.tt02.altinn.no/profile');
+  });
+
+  it('should not render the links to inbox and profile when no url is configured', async () => {
+    window.altinnAppGlobalData.platformFrontendSettings.arbeidsflateInboxUrl = undefined;
+    window.altinnAppGlobalData.platformFrontendSettings.arbeidsflateProfileUrl = undefined;
+
+    await render();
+
+    expect(screen.queryByText(/innboks/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/profil/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /alle skjema/i })).toBeInTheDocument();
+  });
+
   it('should not render links to inbox, schemas and profile when profile does not have "party" property', async () => {
     const profile = getProfileMock();
     delete profile.party;

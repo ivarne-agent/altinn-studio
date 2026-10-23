@@ -16,7 +16,9 @@ export interface InstantiateHeaderProps {
 
 export const InstantiateHeader = ({ profile }: InstantiateHeaderProps) => {
   const party = profile?.party;
+  const inboxUrl = getMessageBoxUrl(party?.partyId);
   const allFormsUrl = returnUrlToAllForms();
+  const profileUrl = returnUrlToProfile();
 
   return (
     <div
@@ -38,14 +40,16 @@ export const InstantiateHeader = ({ profile }: InstantiateHeaderProps) => {
         />
         {party && (
           <ul className={classes.headerLinkList}>
-            <li className={classes.headerLink}>
-              <a
-                className='altinnLink'
-                href={getMessageBoxUrl(party?.partyId)}
-              >
-                <Lang id='instantiate.inbox' />
-              </a>
-            </li>
+            {inboxUrl && (
+              <li className={classes.headerLink}>
+                <a
+                  className='altinnLink'
+                  href={inboxUrl}
+                >
+                  <Lang id='instantiate.inbox' />
+                </a>
+              </li>
+            )}
             {allFormsUrl && (
               <li className={classes.headerLink}>
                 <a
@@ -56,14 +60,16 @@ export const InstantiateHeader = ({ profile }: InstantiateHeaderProps) => {
                 </a>
               </li>
             )}
-            <li className={classes.headerLink}>
-              <a
-                className='altinnLink'
-                href={returnUrlToProfile()}
-              >
-                <Lang id='instantiate.profile' />
-              </a>
-            </li>
+            {profileUrl && (
+              <li className={classes.headerLink}>
+                <a
+                  className='altinnLink'
+                  href={profileUrl}
+                >
+                  <Lang id='instantiate.profile' />
+                </a>
+              </li>
+            )}
           </ul>
         )}
         {party && (

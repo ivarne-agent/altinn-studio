@@ -92,6 +92,28 @@ describe('presentation/AppHeader', () => {
     ).toBeInTheDocument();
   });
 
+  it('links logout to the configured url', async () => {
+    window.altinnAppGlobalData.userProfile = getProfileMock();
+    await render({ party: partyOrg });
+
+    await act(() => userEvent.click(screen.getByRole('button', { name: /Profil ikon knapp/i })));
+
+    expect(screen.getByRole('link', { name: /logg ut/i, hidden: true })).toHaveAttribute(
+      'href',
+      'https://platform.tt02.altinn.no/authentication/api/v1/logout',
+    );
+  });
+
+  // The menu holds only the logout link, so without a logout url there is nothing to open
+  it('should render no menu when no logout url is configured', async () => {
+    window.altinnAppGlobalData.userProfile = getProfileMock();
+    window.altinnAppGlobalData.platformFrontendSettings.logoutUrl = undefined;
+    await render({ party: partyOrg });
+
+    expect(screen.queryByRole('button', { name: /Profil ikon knapp/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/logg ut/i)).not.toBeInTheDocument();
+  });
+
   it('Should render Altinn logo if logo options are not set', async () => {
     window.altinnAppGlobalData.orgLogoUrl = undefined;
     await render({ party: userPerson.party });
