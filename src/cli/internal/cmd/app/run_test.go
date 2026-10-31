@@ -590,6 +590,7 @@ func TestBuildDotnetRunSpec_OverridesInheritedProvisionedSecretsVariables(t *tes
 			"RUNTIME_APP_SECRETS_DIR=/somewhere/else",
 			"RUNTIME_APP_SECRETS_MASKINPORTEN_FILENAME=something-else.json",
 			"RUNTIME_APP_SECRETS_APPCODES_FILENAME=something-else.json",
+			"RUNTIME_APP_SECRETS_APPTOKEN_FILENAME=something-else.json",
 		},
 		defaultTopology(),
 		appsvc.DotnetRunOptions{},
@@ -718,6 +719,7 @@ func assertProvisionedSecretsEnv(t *testing.T, env []string, wantDir string) {
 		"RUNTIME_APP_SECRETS_DIR":                   wantDir,
 		"RUNTIME_APP_SECRETS_MASKINPORTEN_FILENAME": "maskinporten-settings.json",
 		"RUNTIME_APP_SECRETS_APPCODES_FILENAME":     "app-codes.json",
+		"RUNTIME_APP_SECRETS_APPTOKEN_FILENAME":     "app-token.json",
 	} {
 		if got := envValue(t, env, key); got != want {
 			t.Fatalf("%s = %q, want %q", key, got, want)

@@ -18,7 +18,7 @@ import (
 //
 // studioctl advertises every name here, so that the app it starts is given the same complete contract a
 // deployed app is given, and writes the files under those same names: the app codes for every local run, the
-// Maskinporten client when the developer stores one.
+// Maskinporten client when the developer stores one. The app token is advertised but not yet written.
 const (
 	// EnvSecretsDir names the directory the app's secrets are provisioned into.
 	EnvSecretsDir = "RUNTIME_APP_SECRETS_DIR" //nolint:gosec // G101: the name of a variable, not a credential.
@@ -29,6 +29,9 @@ const (
 	// EnvAppCodesFileName names the app's callback verification codes inside that directory.
 	EnvAppCodesFileName = "RUNTIME_APP_SECRETS_APPCODES_FILENAME"
 
+	// EnvAppTokenFileName names the app's token for Storage inside that directory.
+	EnvAppTokenFileName = "RUNTIME_APP_SECRETS_APPTOKEN_FILENAME"
+
 	// MaskinportenFileName is what studioctl calls the Maskinporten client file - the name the operator uses
 	// in a cluster, for a file with the same content. It is both what EnvMaskinportenFileName tells the app
 	// and what StoreMaskinportenClient writes.
@@ -37,6 +40,11 @@ const (
 	// AppCodesFileName is what studioctl calls the app codes file, on the same terms: what
 	// EnvAppCodesFileName tells the app, and what WriteDevelopmentAppCodes writes.
 	AppCodesFileName = "app-codes.json"
+
+	// AppTokenFileName is what EnvAppTokenFileName tells the app its Storage token file is called - the name
+	// the operator uses in a cluster. studioctl does not write this file yet, so a local run sends its requests
+	// to Storage without a token, which the app libraries allow and report.
+	AppTokenFileName = "app-token.json"
 
 	// ContainerDir is where studioctl mounts the secrets directory when the app runs in a container, matching
 	// the platform's own mount point so that a container run resembles a deployed app.

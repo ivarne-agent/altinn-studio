@@ -129,6 +129,7 @@ func TestRunEnvNamesAndCreatesTheSecretsDirectory(t *testing.T) {
 	assertEnvCommandValue(t, got, "RUNTIME_APP_SECRETS_DIR", wantDir)
 	assertEnvCommandValue(t, got, "RUNTIME_APP_SECRETS_MASKINPORTEN_FILENAME", "maskinporten-settings.json")
 	assertEnvCommandValue(t, got, "RUNTIME_APP_SECRETS_APPCODES_FILENAME", "app-codes.json")
+	assertEnvCommandValue(t, got, "RUNTIME_APP_SECRETS_APPTOKEN_FILENAME", "app-token.json")
 	if info, err := os.Stat(wantDir); err != nil || !info.IsDir() {
 		t.Fatalf("%s is not a directory: %v", wantDir, err)
 	}

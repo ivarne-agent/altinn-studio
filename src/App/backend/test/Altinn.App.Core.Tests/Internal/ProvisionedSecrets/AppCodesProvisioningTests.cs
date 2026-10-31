@@ -122,6 +122,7 @@ public sealed class AppCodesProvisioningTests
                 new(ProvisionedSecrets.DirectoryKey, secretsDirectory),
                 new(ProvisionedSecretFiles.Maskinporten.FileNameKey, "maskinporten-settings.json"),
                 new(_file.FileNameKey, _fileName),
+                new(ProvisionedSecretFiles.AppToken.FileNameKey, "app-token.json"),
                 .. appConfiguration.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)),
             ])
             .Build();

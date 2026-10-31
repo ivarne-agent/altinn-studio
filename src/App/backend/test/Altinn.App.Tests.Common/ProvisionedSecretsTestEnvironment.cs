@@ -8,11 +8,12 @@ namespace Altinn.App.Tests.Common;
 
 /// <summary>
 /// <para>The platform's side of the provisioned secrets contract, for a test host that has to start. A
-/// deployed app is told where its secrets are and what each file is called, and the platform provisions both
-/// files the libraries host — the app's one Maskinporten client and its callback verification codes — so a
-/// host given neither does not resemble anything that runs.</para>
-/// <para>This writes throwaway versions of both into a temporary directory, in the shape the operator writes
-/// them, and hands back the variables that point an app at it.</para>
+/// deployed app is told where its secrets are and what each file is called, and the platform provisions the
+/// files the libraries host — the app's one Maskinporten client, its callback verification codes and its token
+/// for Storage — so a host given none of them does not resemble anything that runs.</para>
+/// <para>This writes throwaway versions of the first two into a temporary directory, in the shape the operator
+/// writes them, and hands back the variables that point an app at it. The app token is named but not written:
+/// a host runs without one, and a test that needs one writes it with <see cref="WriteAppToken"/>.</para>
 /// </summary>
 public static class ProvisionedSecretsTestEnvironment
 {
@@ -31,6 +32,13 @@ public static class ProvisionedSecretsTestEnvironment
     /// What a test calls the app codes file, on the same terms.
     /// </summary>
     public const string AppCodesFileName = "app-codes.json";
+
+    /// <summary>
+    /// What a test calls the app token file, on the same terms. Nothing is written under this name by default:
+    /// the Storage clients send their requests without a token when there is none, so a test host starts
+    /// either way. Use <see cref="WriteAppToken"/> where a test needs one.
+    /// </summary>
+    public const string AppTokenFileName = "app-token.json";
 
     /// <summary>
     /// A <c>WorkflowEngineCallback</c> code, so that the enqueue path can mint callback tokens and the
@@ -90,6 +98,7 @@ public static class ProvisionedSecretsTestEnvironment
             new(DirectoryKey, secretsDirectory),
             new(ProvisionedSecretFiles.Maskinporten.FileNameKey, MaskinportenFileName),
             new(ProvisionedSecretFiles.AppCodes.FileNameKey, AppCodesFileName),
+            new(ProvisionedSecretFiles.AppToken.FileNameKey, AppTokenFileName),
         ];
 
     /// <summary>
@@ -106,6 +115,43 @@ public static class ProvisionedSecretsTestEnvironment
     /// <param name="secretsDirectory">The directory standing in for the platform's secrets mount.</param>
     public static void WriteAppCodes(string secretsDirectory) =>
         File.WriteAllText(Path.Join(secretsDirectory, AppCodesFileName), AppCodesJson);
+
+    /// <summary>
+    /// Writes an app token into <paramref name="secretsDirectory"/>, in the shape the operator writes it.
+    /// </summary>
+    /// <param name="secretsDirectory">The directory standing in for the platform's secrets mount.</param>
+    /// <param name="token">The token the app should send.</param>
+    /// <param name="expiresAt">When the token expires.</param>
+    /// <param name="lastWriteTimeUtc">
+    /// The file's write time. The polling watcher compares write times, so a rewrite needs one that is
+    /// visibly newer.
+    /// </param>
+    public static void WriteAppToken(
+        string secretsDirectory,
+        string token,
+        DateTimeOffset expiresAt,
+        DateTime? lastWriteTimeUtc = null
+    )
+    {
+        var issuedAt = expiresAt - TimeSpan.FromHours(2);
+        var settings = new JsonObject
+        {
+            ["AppToken"] = new JsonObject
+            {
+                ["Token"] = token,
+                ["IssuedAt"] = issuedAt.ToString("O"),
+                ["ExpiresAt"] = expiresAt.ToString("O"),
+                ["RefreshAt"] = (expiresAt - TimeSpan.FromHours(1)).ToString("O"),
+            },
+        };
+
+        string path = Path.Join(secretsDirectory, AppTokenFileName);
+        File.WriteAllText(path, settings.ToJsonString());
+        if (lastWriteTimeUtc is not null)
+        {
+            File.SetLastWriteTimeUtc(path, lastWriteTimeUtc.Value);
+        }
+    }
 
     /// <summary>
     /// The contents of the Maskinporten file, in the shape the operator writes: the credentials wrapped in a

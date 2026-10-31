@@ -9,8 +9,9 @@ namespace Altinn.App.Core.Internal.ProvisionedSecrets;
 /// <para>These are the configured descriptors: what the libraries know about a file before an app runs. What
 /// the platform called it is not here — <see cref="ProvisionedSecrets.FromConfiguration"/> resolves every
 /// descriptor once, and the channel holds the resolved copies.</para>
-/// <para>Maskinporten was the first tenant; the app's callback verification codes are the second. Both are
-/// secrets the platform issues, provisions and rotates for the app, and neither is an app's to supply.</para>
+/// <para>Maskinporten was the first tenant, the app's callback verification codes the second and its token for
+/// Storage the third. All are secrets the platform issues, provisions and rotates for the app, and none is an
+/// app's to supply.</para>
 /// </summary>
 internal static class ProvisionedSecretFiles
 {
@@ -29,7 +30,13 @@ internal static class ProvisionedSecretFiles
     public static readonly ProvisionedSecretFile AppCodes = new("RUNTIME_APP_SECRETS_APPCODES_FILENAME", "AppCodes");
 
     /// <summary>
+    /// The app's token for Storage: a short-lived JWT the runtime operator issues for the app and rewrites before
+    /// it expires, which the Storage clients send on every request.
+    /// </summary>
+    public static readonly ProvisionedSecretFile AppToken = new("RUNTIME_APP_SECRETS_APPTOKEN_FILENAME", "AppToken");
+
+    /// <summary>
     /// Every hosted file.
     /// </summary>
-    public static IReadOnlyList<ProvisionedSecretFile> All { get; } = [Maskinporten, AppCodes];
+    public static IReadOnlyList<ProvisionedSecretFile> All { get; } = [Maskinporten, AppCodes, AppToken];
 }

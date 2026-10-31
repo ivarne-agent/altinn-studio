@@ -59,15 +59,17 @@ func (e appEnv) addRunDefaults(
 	// Where the app's secrets are and what every file in that directory is called, named for the app exactly
 	// as the platform names them for a deployed app - the same variables the operator's configuration map
 	// sets in every environment (infra/runtime/apps-config/base/apps-runtime-common-env.yaml), because
-	// studioctl is the platform for a local run. All three are set on every run: the app libraries require
+	// studioctl is the platform for a local run. All of them are set on every run: the app libraries require
 	// them and fall back to nothing, and the directory is there by the time a spec is built, holding the
 	// callback verification codes studioctl provisions for every local run. The Maskinporten client stored
 	// with `studioctl app maskinporten set` lands under the name advertised here, and a client stored while
-	// the app runs is picked up without a restart. None of the three is taken from the inherited
+	// the app runs is picked up without a restart. No app token is written yet, so a local run calls Storage
+	// without one, which the app libraries allow. None of them is taken from the inherited
 	// environment: the contract is studioctl's to state, not the shell's.
 	e.values[appsecrets.EnvSecretsDir] = secretsDir
 	e.values[appsecrets.EnvMaskinportenFileName] = appsecrets.MaskinportenFileName
 	e.values[appsecrets.EnvAppCodesFileName] = appsecrets.AppCodesFileName
+	e.values[appsecrets.EnvAppTokenFileName] = appsecrets.AppTokenFileName
 	// Where the app persists its data-protection keys, which is the one part a run can leave unsaid: a
 	// native run keeps the app libraries' default, the developer's own home directory, and only a container
 	// run is told a directory, the one studioctl mounts for it, as the platform tells a deployed app.

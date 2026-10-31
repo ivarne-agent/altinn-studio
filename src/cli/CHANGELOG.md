@@ -9,6 +9,10 @@ Section ordering: Added, Changed, Fixed, Removed, Security, Deprecated.
 
 ## [Unreleased]
 
+### Changed
+
+- `studioctl app run` and `studioctl app env` set `RUNTIME_APP_SECRETS_APPTOKEN_FILENAME`, which apps on the latest app libraries need to start. ([#21527](https://github.com/Altinn/altinn-studio/pull/21527))
+
 ## [0.1.0-preview.30] - 2026-10-29
 
 ### Added

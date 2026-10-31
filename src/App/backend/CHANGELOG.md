@@ -9,6 +9,10 @@ Section ordering: Added, Changed, Fixed, Removed, Security, Deprecated.
 
 ## [Unreleased]
 
+### Changed
+
+- Apps send Storage the token the platform provisions for them, in the `Altinn-App-Token` header, so Storage can tell which app is calling. Update studioctl before running an app locally: it sets the new `RUNTIME_APP_SECRETS_APPTOKEN_FILENAME` variable, and without it the app does not start. ([#21527](https://github.com/Altinn/altinn-studio/pull/21527))
+
 ## [9.0.0-preview.9] - 2026-10-28
 
 ### Added

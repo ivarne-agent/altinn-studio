@@ -192,7 +192,8 @@ public sealed class WebHostBuilderExtensionsTests
               "STUDIOCTL_APP_RUN": "1",
               "RUNTIME_APP_SECRETS_DIR": {{JsonSerializer.Serialize(tempDirectory.Path)}},
               "RUNTIME_APP_SECRETS_MASKINPORTEN_FILENAME": "maskinporten-settings.json",
-              "RUNTIME_APP_SECRETS_APPCODES_FILENAME": "app-codes.json"
+              "RUNTIME_APP_SECRETS_APPCODES_FILENAME": "app-codes.json",
+              "RUNTIME_APP_SECRETS_APPTOKEN_FILENAME": "app-token.json"
             }
             """,
             out Dictionary<string, string?> values

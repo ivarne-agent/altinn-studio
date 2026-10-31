@@ -353,6 +353,7 @@ public class MaskinportenSettingsTest
                 new(ProvisionedSecrets.DirectoryKey, secretsDirectory),
                 new(ProvisionedSecretFiles.Maskinporten.FileNameKey, "maskinporten-settings.json"),
                 new(ProvisionedSecretFiles.AppCodes.FileNameKey, "app-codes.json"),
+                new(ProvisionedSecretFiles.AppToken.FileNameKey, "app-token.json"),
             ])
             .Build();
 }

@@ -42,6 +42,7 @@ using Altinn.App.Core.Internal.AltinnCdn;
 using Altinn.App.Core.Internal.App;
 using Altinn.App.Core.Internal.AppModel;
 using Altinn.App.Core.Internal.Auth;
+using Altinn.App.Core.Internal.Auth.AppToken;
 using Altinn.App.Core.Internal.Data;
 using Altinn.App.Core.Internal.Events;
 using Altinn.App.Core.Internal.Expressions;
@@ -102,13 +103,16 @@ public static class ServiceCollectionExtensions
         // The app's callback verification codes are provisioned by the platform, so they are read through the
         // private channel and never from the app's own configuration. See ProvisionedSecrets.
         services.BindProvisionedSecret<AppCodesSettings>(ProvisionedSecretFiles.AppCodes);
+        // So is the app's token for Storage, which the operator rewrites before it expires. The Storage clients
+        // send it on every request through AddAppToken, reading the file's current contents each time.
+        services.BindProvisionedSecret<AppTokenSettings>(ProvisionedSecretFiles.AppToken);
 
         AddApplicationIdentifier(services);
 
-        services.AddHttpClient<IApplicationClient, ApplicationClient>();
+        services.AddHttpClient<IApplicationClient, ApplicationClient>().AddAppToken();
         services.AddHttpClient<IAuthenticationClient, AuthenticationClient>();
         services.AddHttpClient<IAuthorizationClient, AuthorizationClient>();
-        services.AddHttpClient<IDataClient, DataClient>();
+        services.AddHttpClient<IDataClient, DataClient>().AddAppToken();
         services.AddTransient<IDataClientWithStorageMetadata>(sp =>
             (IDataClientWithStorageMetadata)sp.GetRequiredService<IDataClient>()
         );
@@ -116,17 +120,17 @@ public static class ServiceCollectionExtensions
             (IInstanceMutationClient)sp.GetRequiredService<IDataClient>()
         );
         services.AddHttpClient<IOrganizationClient, RegisterERClient>();
-        services.AddHttpClient<IInstanceClient, InstanceClient>();
+        services.AddHttpClient<IInstanceClient, InstanceClient>().AddAppToken();
         services.AddTransient<IInstanceClientWithStorageMetadata>(sp =>
             (IInstanceClientWithStorageMetadata)sp.GetRequiredService<IInstanceClient>()
         );
-        services.AddHttpClient<IInstanceEventClient, InstanceEventClient>();
+        services.AddHttpClient<IInstanceEventClient, InstanceEventClient>().AddAppToken();
         services.AddHttpClient<IEventsClient, EventsClient>();
         services.AddProfileClient();
         services.AddHttpClient<IAltinnPartyClient, AltinnPartyClient>();
         services.AddAltinnCdnClient();
         services.AddRegisterClient();
-        services.AddHttpClient<IProcessClient, ProcessClient>();
+        services.AddHttpClient<IProcessClient, ProcessClient>().AddAppToken();
         services.AddHttpClient<IPersonClient, PersonClient>();
         services.AddHttpClient<IAccessManagementClient, AccessManagementClient>();
 
@@ -317,7 +321,7 @@ public static class ServiceCollectionExtensions
 
     private static void AddSignatureServices(IServiceCollection services)
     {
-        services.AddHttpClient<ISignClient, SignClient>();
+        services.AddHttpClient<ISignClient, SignClient>().AddAppToken();
         services.AddTransient<ISigningDelegationService, SigningDelegationService>();
         services.AddTransient<ISigningReceiptService, SigningReceiptService>();
         services.AddTransient<ISigningCallToActionService, SigningCallToActionService>();

@@ -80,6 +80,7 @@ public sealed partial class Telemetry : IDisposable
             InitMaskinporten(context);
             InitCorrespondence(context);
             InitFiks(context);
+            InitAppToken(context);
 
             // NOTE: This Telemetry class is registered as a singleton
             // Metrics could be kept in fields of the respective objects that use them for instrumentation
@@ -265,6 +266,7 @@ public sealed partial class Telemetry : IDisposable
         internal const string NotificationOrderId = "notification.order.id";
         internal const string Result = "result";
         internal const string Type = "type";
+        internal const string Reason = "reason";
         internal const string AuthorizationAction = "authorization.action";
         internal const string AuthorizerAction = "authorization.authorizer.action";
         internal const string AuthorizerTaskId = "authorization.authorizer.task.id";

@@ -12,9 +12,11 @@ public sealed class ProvisionedSecretsTests
 {
     private const string _maskinportenFileName = "maskinporten-settings.json";
     private const string _appCodesFileName = "app-codes.json";
+    private const string _appTokenFileName = "app-token.json";
 
     private static readonly ProvisionedSecretFile _maskinporten = ProvisionedSecretFiles.Maskinporten;
     private static readonly ProvisionedSecretFile _appCodes = ProvisionedSecretFiles.AppCodes;
+    private static readonly ProvisionedSecretFile _appToken = ProvisionedSecretFiles.AppToken;
 
     [Fact]
     public void GetExistingProviderRoot_ReturnsPath_WhenDirectoryExists()
@@ -191,7 +193,8 @@ public sealed class ProvisionedSecretsTests
             ConfigurationWith(
                 (ProvisionedSecrets.DirectoryKey, tempDirectory.Path),
                 (_maskinporten.FileNameKey, "credentials.json"),
-                (_appCodes.FileNameKey, "codes.json")
+                (_appCodes.FileNameKey, "codes.json"),
+                (_appToken.FileNameKey, "token.json")
             )
         );
 
@@ -204,6 +207,10 @@ public sealed class ProvisionedSecretsTests
             Path.GetFullPath(Path.Join(tempDirectory.Path, "codes.json")),
             Path.GetFullPath(secrets.PathOf(_appCodes))
         );
+        Assert.Equal(
+            Path.GetFullPath(Path.Join(tempDirectory.Path, "token.json")),
+            Path.GetFullPath(secrets.PathOf(_appToken))
+        );
     }
 
     /// <summary>
@@ -214,6 +221,7 @@ public sealed class ProvisionedSecretsTests
     [InlineData(ProvisionedSecrets.DirectoryKey)]
     [InlineData("RUNTIME_APP_SECRETS_MASKINPORTEN_FILENAME")]
     [InlineData("RUNTIME_APP_SECRETS_APPCODES_FILENAME")]
+    [InlineData("RUNTIME_APP_SECRETS_APPTOKEN_FILENAME")]
     public void FromConfiguration_Throws_WhenAVariableIsNotSet(string missingKey)
     {
         using var tempDirectory = new TempDirectory();
@@ -222,6 +230,7 @@ public sealed class ProvisionedSecretsTests
             [ProvisionedSecrets.DirectoryKey] = tempDirectory.Path,
             [_maskinporten.FileNameKey] = _maskinportenFileName,
             [_appCodes.FileNameKey] = _appCodesFileName,
+            [_appToken.FileNameKey] = _appTokenFileName,
         };
         values.Remove(missingKey);
 
@@ -243,7 +252,8 @@ public sealed class ProvisionedSecretsTests
                 ConfigurationWith(
                     (ProvisionedSecrets.DirectoryKey, tempDirectory.Path),
                     (_maskinporten.FileNameKey, "  "),
-                    (_appCodes.FileNameKey, _appCodesFileName)
+                    (_appCodes.FileNameKey, _appCodesFileName),
+                    (_appToken.FileNameKey, _appTokenFileName)
                 )
             )
         );
@@ -271,7 +281,8 @@ public sealed class ProvisionedSecretsTests
                 ConfigurationWith(
                     (ProvisionedSecrets.DirectoryKey, tempDirectory.Path),
                     (_maskinporten.FileNameKey, fileName),
-                    (_appCodes.FileNameKey, _appCodesFileName)
+                    (_appCodes.FileNameKey, _appCodesFileName),
+                    (_appToken.FileNameKey, _appTokenFileName)
                 )
             )
         );
@@ -382,7 +393,8 @@ public sealed class ProvisionedSecretsTests
         using IHost host = BuildChannelHost(
             (ProvisionedSecrets.DirectoryKey, tempDirectory.Path),
             (_maskinporten.FileNameKey, _maskinportenFileName),
-            (_appCodes.FileNameKey, _appCodesFileName)
+            (_appCodes.FileNameKey, _appCodesFileName),
+            (_appToken.FileNameKey, _appTokenFileName)
         );
 
         await host.StartAsync();
@@ -419,7 +431,8 @@ public sealed class ProvisionedSecretsTests
             ConfigurationWith(
                 (ProvisionedSecrets.DirectoryKey, secretsDirectory),
                 (_maskinporten.FileNameKey, maskinportenFileName),
-                (_appCodes.FileNameKey, _appCodesFileName)
+                (_appCodes.FileNameKey, _appCodesFileName),
+                (_appToken.FileNameKey, _appTokenFileName)
             )
         );
 
