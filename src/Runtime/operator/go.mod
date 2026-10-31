@@ -6,6 +6,7 @@ require (
 	altinn.studio/common v0.0.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.22.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0
+	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys v1.5.0
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.5.0
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/fluxcd/helm-controller/api v1.5.5

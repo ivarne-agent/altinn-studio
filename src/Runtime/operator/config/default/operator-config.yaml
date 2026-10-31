@@ -10,3 +10,9 @@ data:
     maskinporten_controller.jwk_rotation_threshold=23d
     maskinporten_controller.jwk_expiry=30d
     keyvault_sync_controller.poll_interval=5m
+    app_token_controller.token_lifetime=2h
+    app_token_controller.refresh_lead_time=1h
+    app_token_controller.key_version_grace=1h
+    app_token_controller.audience=altinn-storage
+    app_token_controller.issuer=altinn-studio-operator
+    app_token_controller.key_name_prefix=app-token-signer-

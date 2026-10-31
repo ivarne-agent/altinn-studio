@@ -32,8 +32,11 @@ import (
 
 	resourcesv1alpha1 "altinn.studio/operator/api/v1alpha1"
 	"altinn.studio/operator/internal"
+	"altinn.studio/operator/internal/apptoken"
 	"altinn.studio/operator/internal/cnpgapi"
+	"altinn.studio/operator/internal/config"
 	"altinn.studio/operator/internal/controller/appcodesync"
+	"altinn.studio/operator/internal/controller/apptokensync"
 	"altinn.studio/operator/internal/controller/azurekeyvaultsync"
 	"altinn.studio/operator/internal/controller/cnpgsync"
 	"altinn.studio/operator/internal/controller/grafanapolicysync"
@@ -42,6 +45,7 @@ import (
 	"altinn.studio/operator/internal/controller/secretsync"
 	"altinn.studio/operator/internal/grafanaapi"
 	"altinn.studio/operator/internal/operatorcontext"
+	rtpkg "altinn.studio/operator/internal/runtime"
 	"altinn.studio/operator/internal/telemetry"
 	// +kubebuilder:scaffold:imports
 )
@@ -73,6 +77,27 @@ func exitAfterStartupFailure(span trace.Span, shutdown func(context.Context) err
 	span.End()
 	shutdownTelemetry(shutdown)
 	os.Exit(1)
+}
+
+// setupAppSecretControllers registers the controllers that write files into each app's deployment
+// secret: app codes, and app tokens signed with the signer for the environment.
+func setupAppSecretControllers(rt rtpkg.Runtime, mgr ctrl.Manager) error {
+	if err := appcodesync.NewReconciler(rt, mgr.GetClient()).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("set up AppCodesSync controller: %w", err)
+	}
+
+	signer, err := apptoken.NewSigner(
+		rt.GetOperatorContext().Environment,
+		rt.GetClock(),
+		func() config.AppTokenControllerConfig { return rt.GetConfigMonitor().Get().AppTokenController },
+	)
+	if err != nil {
+		return fmt.Errorf("create app token signer: %w", err)
+	}
+	if err := apptokensync.NewReconciler(rt, mgr.GetClient(), signer).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("set up AppTokenSync controller: %w", err)
+	}
+	return nil
 }
 
 // newManager loads the Kubernetes configuration with ctrl.GetConfig rather than GetConfigOrDie,
@@ -215,8 +240,8 @@ func main() {
 		exitAfterStartupFailure(span, otelShutdown)
 	}
 
-	if err = appcodesync.NewReconciler(rt, mgr.GetClient()).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "AppCodesSync")
+	if err = setupAppSecretControllers(rt, mgr); err != nil {
+		setupLog.Error(err, "unable to create app secret controllers")
 		exitAfterStartupFailure(span, otelShutdown)
 	}
 	// +kubebuilder:scaffold:builder

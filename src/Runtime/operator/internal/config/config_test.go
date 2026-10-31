@@ -102,6 +102,12 @@ maskinporten_controller.requeue_after=5m
 maskinporten_controller.jwk_rotation_threshold=1m
 maskinporten_controller.jwk_expiry=2m
 keyvault_sync_controller.poll_interval=5m
+app_token_controller.token_lifetime=2h
+app_token_controller.refresh_lead_time=1h
+app_token_controller.key_version_grace=1h
+app_token_controller.audience=altinn-storage
+app_token_controller.issuer=altinn-studio-operator
+app_token_controller.key_name_prefix=app-token-signer-
 org_registry.url=http://localhost:8052/orgs/altinn-orgs.json`
 
 	_, err = file.WriteString(initialConfig)
@@ -128,6 +134,12 @@ maskinporten_controller.requeue_after=10m
 maskinporten_controller.jwk_rotation_threshold=1m
 maskinporten_controller.jwk_expiry=2m
 keyvault_sync_controller.poll_interval=5m
+app_token_controller.token_lifetime=2h
+app_token_controller.refresh_lead_time=1h
+app_token_controller.key_version_grace=1h
+app_token_controller.audience=altinn-storage
+app_token_controller.issuer=altinn-studio-operator
+app_token_controller.key_name_prefix=app-token-signer-
 org_registry.url=http://localhost:8052/orgs/altinn-orgs.json`
 
 	err = os.WriteFile(file.Name(), []byte(updatedConfig), 0644)
@@ -161,6 +173,12 @@ maskinporten_controller.requeue_after=5m
 maskinporten_controller.jwk_rotation_threshold=1m
 maskinporten_controller.jwk_expiry=2m
 keyvault_sync_controller.poll_interval=5m
+app_token_controller.token_lifetime=2h
+app_token_controller.refresh_lead_time=1h
+app_token_controller.key_version_grace=1h
+app_token_controller.audience=altinn-storage
+app_token_controller.issuer=altinn-studio-operator
+app_token_controller.key_name_prefix=app-token-signer-
 org_registry.url=http://localhost:8052/orgs/altinn-orgs.json`
 
 	_, err = file.WriteString(initialConfig)
@@ -244,4 +262,68 @@ func TestParseDuration(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateAppTokenControllerConfig(t *testing.T) {
+	valid := AppTokenControllerConfig{
+		Audience:        "altinn-storage",
+		Issuer:          "altinn-studio-operator",
+		KeyNamePrefix:   "app-token-signer-",
+		TokenLifetime:   2 * time.Hour,
+		RefreshLeadTime: time.Hour,
+		KeyVersionGrace: time.Hour,
+	}
+
+	tests := []struct {
+		mutate  func(*AppTokenControllerConfig)
+		wantErr error
+		name    string
+	}{
+		{name: "defaults", mutate: func(*AppTokenControllerConfig) {}},
+		{name: "no grace", mutate: func(c *AppTokenControllerConfig) { c.KeyVersionGrace = 0 }},
+		{
+			name:    "negative grace",
+			mutate:  func(c *AppTokenControllerConfig) { c.KeyVersionGrace = -time.Second },
+			wantErr: errAppTokenGraceNegative,
+		},
+		{
+			name:    "lead equals lifetime",
+			mutate:  func(c *AppTokenControllerConfig) { c.RefreshLeadTime = c.TokenLifetime },
+			wantErr: errAppTokenLeadTimeOrder,
+		},
+		{
+			name:    "zero lead",
+			mutate:  func(c *AppTokenControllerConfig) { c.RefreshLeadTime = 0 },
+			wantErr: errAppTokenLeadTimeOrder,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			cfg := valid
+			tt.mutate(&cfg)
+			err := ValidateAppTokenControllerConfig(&cfg)
+			if tt.wantErr == nil {
+				g.Expect(err).NotTo(HaveOccurred())
+			} else {
+				g.Expect(err).To(MatchError(tt.wantErr))
+			}
+		})
+	}
+}
+
+func TestConfigLoadsAppTokenControllerDefaults(t *testing.T) {
+	g := NewWithT(t)
+
+	monitor, err := GetConfig(context.Background(), operatorcontext.EnvironmentLocal, "")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(monitor.Get().AppTokenController).To(Equal(AppTokenControllerConfig{
+		Audience:        "altinn-storage",
+		Issuer:          "altinn-studio-operator",
+		KeyNamePrefix:   "app-token-signer-",
+		TokenLifetime:   2 * time.Hour,
+		RefreshLeadTime: time.Hour,
+		KeyVersionGrace: time.Hour,
+	}))
 }

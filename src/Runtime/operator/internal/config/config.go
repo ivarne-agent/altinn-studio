@@ -28,6 +28,10 @@ var (
 	errJwkExpiryTooLow         = errors.New("jwk_expiry must be at least the minimum duration")
 	errJwkExpiryTooHigh        = errors.New("jwk_expiry must be at most the maximum duration")
 	errJwkExpiryThresholdOrder = errors.New("jwk_expiry must be greater than jwk_rotation_threshold")
+	errAppTokenLeadTimeOrder   = errors.New(
+		"app_token_controller: token_lifetime must be greater than refresh_lead_time, which must be positive",
+	)
+	errAppTokenGraceNegative = errors.New("app_token_controller: key_version_grace must not be negative")
 )
 
 type ConfigMonitor struct {
@@ -125,6 +129,11 @@ func (m *ConfigMonitor) refresh(ctx context.Context) error {
 		return fmt.Errorf("maskinporten controller config validation failed: %w", err)
 	}
 
+	if err := ValidateAppTokenControllerConfig(&cfg.AppTokenController); err != nil {
+		commontelemetry.SetError(span, "validate_app_token_config", err)
+		return fmt.Errorf("app token controller config validation failed: %w", err)
+	}
+
 	if oldCfg != nil && !configEqual(oldCfg, &cfg) {
 		log.FromContext(ctx).Info("config changed", "config", cfg.SafeLogValue())
 	}
@@ -141,6 +150,7 @@ func configEqual(a, b *Config) bool {
 type Config struct {
 	MaskinportenApi        MaskinportenApiConfig        `koanf:"maskinporten_api"         validate:"required"`
 	OrgRegistry            OrgRegistryConfig            `koanf:"org_registry"             validate:"required"`
+	AppTokenController     AppTokenControllerConfig     `koanf:"app_token_controller"     validate:"required"`
 	MaskinportenController MaskinportenControllerConfig `koanf:"maskinporten_controller"  validate:"required"`
 	KeyVaultSyncController KeyVaultSyncControllerConfig `koanf:"keyvault_sync_controller" validate:"required"`
 }
@@ -161,6 +171,22 @@ type MaskinportenControllerConfig struct {
 
 type KeyVaultSyncControllerConfig struct {
 	PollInterval time.Duration `koanf:"poll_interval" validate:"required,min=1m,max=24h"`
+}
+
+// AppTokenControllerConfig configures the app tokens apps use to authenticate to Storage.
+type AppTokenControllerConfig struct {
+	// Audience and Issuer are the token's aud and iss claims.
+	Audience string `koanf:"audience" validate:"required"`
+	Issuer   string `koanf:"issuer"   validate:"required"`
+	// KeyNamePrefix is the Key Vault key name before the service owner id.
+	KeyNamePrefix string `koanf:"key_name_prefix" validate:"required"`
+	// TokenLifetime is the time from issuing a token to its expiry.
+	TokenLifetime time.Duration `koanf:"token_lifetime" validate:"required,max=24h"`
+	// RefreshLeadTime is how long before expiry the token is replaced.
+	RefreshLeadTime time.Duration `koanf:"refresh_lead_time" validate:"required"`
+	// KeyVersionGrace is how old a key version must be before it signs tokens, so that Storage has
+	// fetched its public key first.
+	KeyVersionGrace time.Duration `koanf:"key_version_grace"`
 }
 
 type OrgRegistryConfig struct {
@@ -204,6 +230,22 @@ func ValidateMaskinportenControllerConfig(c *MaskinportenControllerConfig, isLoc
 	return nil
 }
 
+// ValidateAppTokenControllerConfig checks the relations between the app token durations.
+func ValidateAppTokenControllerConfig(c *AppTokenControllerConfig) error {
+	if c.RefreshLeadTime <= 0 || c.TokenLifetime <= c.RefreshLeadTime {
+		return fmt.Errorf(
+			"%w: token_lifetime=%s refresh_lead_time=%s",
+			errAppTokenLeadTimeOrder,
+			c.TokenLifetime,
+			c.RefreshLeadTime,
+		)
+	}
+	if c.KeyVersionGrace < 0 {
+		return fmt.Errorf("%w: %s", errAppTokenGraceNegative, c.KeyVersionGrace)
+	}
+	return nil
+}
+
 // SafeLogValue returns a map representation of Config suitable for logging,
 // with sensitive fields redacted.
 func (c *Config) SafeLogValue() map[string]any {
@@ -211,6 +253,7 @@ func (c *Config) SafeLogValue() map[string]any {
 		"maskinporten_api":         c.MaskinportenApi.SafeLogValue(),
 		"maskinporten_controller":  c.MaskinportenController,
 		"keyvault_sync_controller": c.KeyVaultSyncController,
+		"app_token_controller":     c.AppTokenController,
 		"org_registry":             c.OrgRegistry,
 	}
 }
@@ -276,6 +319,10 @@ func GetConfig(ctx context.Context, environment string, configFilePath string) (
 	isLocal := environment == operatorcontext.EnvironmentLocal
 	if err := ValidateMaskinportenControllerConfig(&monitor.Get().MaskinportenController, isLocal); err != nil {
 		return nil, fmt.Errorf("maskinporten controller config validation failed: %w", err)
+	}
+
+	if err := ValidateAppTokenControllerConfig(&monitor.Get().AppTokenController); err != nil {
+		return nil, fmt.Errorf("app token controller config validation failed: %w", err)
 	}
 
 	monitor.start(ctx)
