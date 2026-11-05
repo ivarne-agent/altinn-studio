@@ -739,7 +739,8 @@ public class RepositoryServiceTests
             altinnStorageAppMetadataClient,
             altinnGitRepositoryFactory,
             httpContextAccessorMock.Object,
-            giteaClientMock
+            giteaClientMock,
+            new GiteaAppVersionService(giteaClientMock)
         );
 
         ISchemaModelService schemaModelServiceMock = new Mock<ISchemaModelService>().Object;

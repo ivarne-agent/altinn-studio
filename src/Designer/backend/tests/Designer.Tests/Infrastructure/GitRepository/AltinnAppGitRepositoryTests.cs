@@ -1,3 +1,4 @@
+#pragma warning disable CS0618 // Designer still binds data types to tasks through TaskId; v9 apps read TaskIds
 using System;
 using System.Collections.Generic;
 using System.IO;

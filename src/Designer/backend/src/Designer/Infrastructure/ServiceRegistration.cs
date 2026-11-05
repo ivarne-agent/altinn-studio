@@ -144,6 +144,7 @@ public static class ServiceRegistration
         services.AddHttpClient<IOrgService, OrgService>();
         services.AddHttpClient<ImageClient>();
         services.AddTransient<IAppVersionService, AppVersionService>();
+        services.AddTransient<IGiteaAppVersionService, GiteaAppVersionService>();
         services.AddTransient<IAppDevelopmentService, AppDevelopmentService>();
         services.AddTransient<IUiFoldersService, UiFoldersService>();
         services.AddTransient<ILayoutReferenceUpdater, LayoutReferenceUpdater>();

@@ -60,10 +60,12 @@ public class ProcessTaskIdChangedApplicationMetadataHandler : INotificationHandl
     private static bool TryChangeTaskIds(Application applicationMetadata, string oldId, string newId)
     {
         bool hasChanges = false;
+#pragma warning disable CS0618 // Designer still binds data types to tasks through TaskId; v9 apps read TaskIds
         foreach (DataType applicationMetadataDataType in applicationMetadata.DataTypes.Where(x => x.TaskId == oldId))
         {
             applicationMetadataDataType.TaskId = newId;
             hasChanges = true;
+#pragma warning restore CS0618
         }
 
         return hasChanges;

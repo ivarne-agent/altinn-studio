@@ -68,6 +68,7 @@ public class ProcessDataTypesChangedApplicationMetadataHandler : INotificationHa
     {
         bool hasChanges = false;
 
+#pragma warning disable CS0618 // Designer still binds data types to tasks through TaskId; v9 apps read TaskIds
         var dataTypesToDisconnect = applicationMetadata.DataTypes.FindAll(dataType =>
             dataType.TaskId == connectedTaskId
         );
@@ -86,6 +87,7 @@ public class ProcessDataTypesChangedApplicationMetadataHandler : INotificationHa
                 hasChanges = true;
             }
         }
+#pragma warning restore CS0618
 
         return hasChanges;
     }

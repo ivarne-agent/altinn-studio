@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -47,6 +49,36 @@ public static class ApplicationMetadataJsonHelper
         string key = UsesPascalCaseProps(jsonObj) ? "VersionId" : "versionId";
 
         jsonObj[key] = versionId;
+
+        return jsonObj.ToJsonString(serializationOptions);
+    }
+
+    /// <summary>
+    /// Sets <c>altinnNugetVersion</c>, or removes it when <paramref name="altinnNugetVersion"/> is null. Any key that
+    /// differs only in casing is removed first, so the JSON never carries a second, hand-written value.
+    /// </summary>
+    public static string SetAltinnNugetVersion(
+        string json,
+        string? altinnNugetVersion,
+        JsonSerializerOptions? serializationOptions = null
+    )
+    {
+        var jsonObj = ParseAndEnsureJsonObject(json);
+        string key = UsesPascalCaseProps(jsonObj) ? "AltinnNugetVersion" : "altinnNugetVersion";
+
+        List<string> existingKeys = jsonObj
+            .Select(property => property.Key)
+            .Where(propertyKey => string.Equals(propertyKey, key, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        foreach (string existingKey in existingKeys)
+        {
+            jsonObj.Remove(existingKey);
+        }
+
+        if (altinnNugetVersion is not null)
+        {
+            jsonObj[key] = altinnNugetVersion;
+        }
 
         return jsonObj.ToJsonString(serializationOptions);
     }

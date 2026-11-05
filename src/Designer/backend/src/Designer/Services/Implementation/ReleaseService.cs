@@ -7,8 +7,6 @@ using System.Net;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Xml;
-using Altinn.Studio.Designer.Clients.Interfaces;
 using Altinn.Studio.Designer.Configuration;
 using Altinn.Studio.Designer.Helpers;
 using Altinn.Studio.Designer.Infrastructure.Models;
@@ -26,7 +24,6 @@ using Altinn.Studio.Designer.ViewModels.Response;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Rest.TransientFaultHandling;
-using NuGet.Versioning;
 
 namespace Altinn.Studio.Designer.Services.Implementation;
 
@@ -39,7 +36,7 @@ public class ReleaseService : IReleaseService
     private readonly AzureDevOpsSettings _azureDevOpsSettings;
     private readonly IReleaseRepository _releaseRepository;
     private readonly IAppScopesService _appScopesService;
-    private readonly IGiteaClient _giteaClient;
+    private readonly IGiteaAppVersionService _giteaAppVersionService;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly GeneralSettings _generalSettings;
     private readonly IApiKeyService _apiKeyService;
@@ -54,7 +51,7 @@ public class ReleaseService : IReleaseService
         IAzureDevOpsBuildClient azureDevOpsBuildClient,
         IReleaseRepository releaseRepository,
         IAppScopesService appScopesService,
-        IGiteaClient giteaClient,
+        IGiteaAppVersionService giteaAppVersionService,
         AzureDevOpsSettings azureDevOpsOptions,
         GeneralSettings generalSettings,
         IApiKeyService apiKeyService,
@@ -66,7 +63,7 @@ public class ReleaseService : IReleaseService
         _azureDevOpsBuildClient = azureDevOpsBuildClient;
         _releaseRepository = releaseRepository;
         _appScopesService = appScopesService;
-        _giteaClient = giteaClient;
+        _giteaAppVersionService = giteaAppVersionService;
         _httpContextAccessor = httpContextAccessor;
         _generalSettings = generalSettings;
         _apiKeyService = apiKeyService;
@@ -235,58 +232,41 @@ public class ReleaseService : IReleaseService
         CancellationToken cancellationToken
     )
     {
-        FileSystemObject appCsproj;
-        try
+        AppLibVersionLookup appLibVersion = await _giteaAppVersionService.GetAppLibVersionAsync(
+            release.Org,
+            release.App,
+            release.TargetCommitish,
+            cancellationToken
+        );
+
+        switch (appLibVersion.Status)
         {
-            appCsproj = await _giteaClient.GetFileAsync(
-                release.Org,
-                release.App,
-                "App/App.csproj",
-                release.TargetCommitish,
-                cancellationToken
-            );
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            Activity.Current?.SetTag(ServiceTelemetry.Attributes.Release.MaskinportenAppCsprojFetchFailed, true);
-            _logger.LogWarning(
-                ex,
-                "Could not fetch App.csproj while checking default Maskinporten scopes for {Org}/{App} at {TargetCommitish}.",
-                release.Org,
-                release.App,
-                release.TargetCommitish
-            );
-            return false;
+            case AppLibVersionLookupStatus.CsprojFetchFailed:
+                Activity.Current?.SetTag(ServiceTelemetry.Attributes.Release.MaskinportenAppCsprojFetchFailed, true);
+                _logger.LogWarning(
+                    appLibVersion.Exception,
+                    "Could not fetch App.csproj while checking default Maskinporten scopes for {Org}/{App} at {TargetCommitish}.",
+                    release.Org,
+                    release.App,
+                    release.TargetCommitish
+                );
+                break;
+            case AppLibVersionLookupStatus.CsprojDecodeFailed:
+                Activity.Current?.SetTag(ServiceTelemetry.Attributes.Release.MaskinportenAppCsprojDecodeFailed, true);
+                _logger.LogWarning(
+                    appLibVersion.Exception,
+                    "Could not decode App.csproj content while checking default Maskinporten scopes."
+                );
+                break;
+            case AppLibVersionLookupStatus.CsprojParseFailed:
+                _logger.LogWarning(
+                    appLibVersion.Exception,
+                    "Could not parse App.csproj while checking default Maskinporten scopes."
+                );
+                break;
         }
 
-        if (appCsproj?.Content is null)
-        {
-            return false;
-        }
-
-        try
-        {
-            byte[] csprojContent = Convert.FromBase64String(appCsproj.Content);
-            string[] packageNames = ["Altinn.App.Api", "Altinn.App.Api.Experimental"];
-
-            return PackageVersionHelper.TryGetPackageVersionFromCsprojContent(
-                    csprojContent,
-                    packageNames,
-                    out SemanticVersion version
-                )
-                && version.Major >= 9;
-        }
-        catch (FormatException ex)
-        {
-            Activity.Current?.SetTag(ServiceTelemetry.Attributes.Release.MaskinportenAppCsprojDecodeFailed, true);
-            _logger.LogWarning(ex, "Could not decode App.csproj content while checking default Maskinporten scopes.");
-            return false;
-        }
-        catch (XmlException ex)
-        {
-            _logger.LogWarning(ex, "Could not parse App.csproj while checking default Maskinporten scopes.");
-            return false;
-        }
+        return appLibVersion.IsFound && appLibVersion.Version.Major >= 9;
     }
 
     private static Activity StartActivity(string methodName, ReleaseEntity release)

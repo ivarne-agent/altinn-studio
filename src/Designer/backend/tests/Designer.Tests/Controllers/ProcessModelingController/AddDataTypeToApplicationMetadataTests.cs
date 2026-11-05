@@ -102,8 +102,8 @@ public class AddDataTypeToApplicationMetadataTests
             AllowedContentTypes = new List<string>() { "application/json" },
             MaxCount = 1,
             MinCount = 0,
+#pragma warning disable CS0618 // Designer still binds data types to tasks through TaskId, and v8 still uses EnablePdfCreation
             TaskId = taskId,
-#pragma warning disable CS0618 // V8 still uses this flag
             EnablePdfCreation = false,
 #pragma warning restore CS0618
             EnableFileScan = false,
@@ -117,7 +117,9 @@ public class AddDataTypeToApplicationMetadataTests
             expectedDataType,
             appMetadata.DataTypes.Find(dataType => dataType.Id == dataTypeId)
         );
+#pragma warning disable CS0618 // Designer still binds data types to tasks through TaskId; v9 apps read TaskIds
         Assert.Equal(taskId, appMetadata.DataTypes.Find(dataType => dataType.Id == dataTypeId).TaskId);
+#pragma warning restore CS0618
     }
 
     [Theory]
@@ -160,8 +162,8 @@ public class AddDataTypeToApplicationMetadataTests
             AllowedContentTypes = new List<string>() { "application/json" },
             MaxCount = 1,
             MinCount = 0,
+#pragma warning disable CS0618 // Designer still binds data types to tasks through TaskId, and v8 still uses EnablePdfCreation
             TaskId = taskId,
-#pragma warning disable CS0618 // V8 still uses this flag
             EnablePdfCreation = false,
 #pragma warning restore CS0618
             EnableFileScan = false,
@@ -176,7 +178,9 @@ public class AddDataTypeToApplicationMetadataTests
             expectedDataType,
             appMetadata.DataTypes.Find(dataType => dataType.Id == dataTypeId)
         );
+#pragma warning disable CS0618 // Designer still binds data types to tasks through TaskId; v9 apps read TaskIds
         Assert.Equal(taskId, appMetadata.DataTypes.Find(dataType => dataType.Id == dataTypeId).TaskId);
+#pragma warning restore CS0618
     }
 
     [Fact]
@@ -216,7 +220,9 @@ public class AddDataTypeToApplicationMetadataTests
         );
 
         DataType dataType = Assert.Single(appMetadata.DataTypes, type => type.Id == dataTypeId);
+#pragma warning disable CS0618 // Designer still binds data types to tasks through TaskId; v9 apps read TaskIds
         Assert.Equal(taskId, dataType.TaskId);
+#pragma warning restore CS0618
         Assert.Equal(allowedContentTypes, dataType.AllowedContentTypes);
         Assert.Equal(allowedContributors, dataType.AllowedContributors);
     }

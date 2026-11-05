@@ -206,7 +206,9 @@ public class ProcessModelingService : IProcessModelingService
                 AllowedContentTypes =
                     allowedContentTypes?.Count > 0 ? allowedContentTypes : new List<string> { "application/json" },
                 MaxCount = 1,
+#pragma warning disable CS0618 // Designer still binds data types to tasks through TaskId; v9 apps read TaskIds
                 TaskId = taskId,
+#pragma warning restore CS0618
             };
 
             if (!_appVersionService.IsV9App(altinnRepoEditingContext))

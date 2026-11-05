@@ -692,7 +692,9 @@ public class SchemaModelService : ISchemaModelService
             logicElement = new DataType
             {
                 Id = dataTypeId,
+#pragma warning disable CS0618 // Designer still binds data types to tasks through TaskId; v9 apps read TaskIds
                 TaskId = null,
+#pragma warning restore CS0618
                 AllowedContentTypes = new List<string>() { "application/xml" },
                 MaxCount = 1,
                 MinCount = 1,

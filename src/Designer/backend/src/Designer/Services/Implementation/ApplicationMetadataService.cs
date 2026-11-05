@@ -11,6 +11,7 @@ using Altinn.Studio.Designer.Clients.Interfaces;
 using Altinn.Studio.Designer.Configuration;
 using Altinn.Studio.Designer.Helpers;
 using Altinn.Studio.Designer.Infrastructure.GitRepository;
+using Altinn.Studio.Designer.Models;
 using Altinn.Studio.Designer.Models.App;
 using Altinn.Studio.Designer.Services.Interfaces;
 using Altinn.Studio.Designer.TypedHttpClients.AltinnStorage;
@@ -34,6 +35,7 @@ public class ApplicationMetadataService : IApplicationMetadataService
     private readonly IAltinnGitRepositoryFactory _altinnGitRepositoryFactory;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IGiteaClient _giteaClient;
+    private readonly IGiteaAppVersionService _giteaAppVersionService;
 
     /// <summary>
     /// Constructor
@@ -43,12 +45,14 @@ public class ApplicationMetadataService : IApplicationMetadataService
     /// <param name="altinnGitRepositoryFactory">IAltinnGitRepository</param>
     /// <param name="httpContextAccessor">The http context accessor</param>
     /// <param name="giteaClient">The gitea client</param>
+    /// <param name="giteaAppVersionService">Reads the app library version at a commit</param>
     public ApplicationMetadataService(
         ILogger<ApplicationMetadataService> logger,
         IAltinnStorageAppMetadataClient storageAppMetadataClient,
         IAltinnGitRepositoryFactory altinnGitRepositoryFactory,
         IHttpContextAccessor httpContextAccessor,
-        IGiteaClient giteaClient
+        IGiteaClient giteaClient,
+        IGiteaAppVersionService giteaAppVersionService
     )
     {
         _logger = logger;
@@ -56,6 +60,7 @@ public class ApplicationMetadataService : IApplicationMetadataService
         _altinnGitRepositoryFactory = altinnGitRepositoryFactory;
         _httpContextAccessor = httpContextAccessor;
         _giteaClient = giteaClient;
+        _giteaAppVersionService = giteaAppVersionService;
     }
 
     /// <inheritdoc/>
@@ -161,7 +166,9 @@ public class ApplicationMetadataService : IApplicationMetadataService
                         AllowAnonymousOnStateless = false,
                         AutoDeleteOnProcessEnd = false,
                     },
+#pragma warning disable CS0618 // Designer still binds data types to tasks through TaskId; v9 apps read TaskIds
                     TaskId = "Task_1",
+#pragma warning restore CS0618
                     MaxCount = 1,
                     MinCount = 1,
                     EnableFileScan = false,
@@ -286,7 +293,7 @@ public class ApplicationMetadataService : IApplicationMetadataService
     )
     {
         cancellationToken.ThrowIfCancellationRequested();
-        await UpdateApplicationMetadataInStorage(org, app, appMetadataJson, envName, shortCommitId);
+        await UpdateApplicationMetadataInStorage(org, app, appMetadataJson, envName, shortCommitId, cancellationToken);
     }
 
     public async Task<ApplicationMetadata> GetApplicationMetadataFromRepository(string org, string app)
@@ -342,7 +349,8 @@ public class ApplicationMetadataService : IApplicationMetadataService
         string app,
         string applicationMetadataJson,
         string envName,
-        string shortCommitId
+        string shortCommitId,
+        CancellationToken cancellationToken
     )
     {
         applicationMetadataJson = ApplicationMetadataJsonHelper.SetId(applicationMetadataJson, id: $"{org}/{app}");
@@ -350,7 +358,45 @@ public class ApplicationMetadataService : IApplicationMetadataService
             applicationMetadataJson,
             versionId: shortCommitId
         );
+        applicationMetadataJson = ApplicationMetadataJsonHelper.SetAltinnNugetVersion(
+            applicationMetadataJson,
+            await GetAltinnNugetVersion(org, app, shortCommitId, cancellationToken)
+        );
 
         await _storageAppMetadataClient.UpsertApplicationMetadata(org, app, applicationMetadataJson, envName);
+    }
+
+    /// <summary>
+    /// Returns the app library version the deployed commit references, which Storage records as
+    /// <c>altinnNugetVersion</c>. Returns null when it cannot be determined, so that a hand-written value in the
+    /// repository is never forwarded.
+    /// </summary>
+    private async Task<string> GetAltinnNugetVersion(
+        string org,
+        string app,
+        string shortCommitId,
+        CancellationToken cancellationToken
+    )
+    {
+        AppLibVersionLookup appLibVersion = await _giteaAppVersionService.GetAppLibVersionAsync(
+            org,
+            app,
+            shortCommitId,
+            cancellationToken
+        );
+        if (appLibVersion.IsFound)
+        {
+            return appLibVersion.Version.ToNormalizedString();
+        }
+
+        _logger.LogWarning(
+            appLibVersion.Exception,
+            "Could not determine the app library version of {Org}/{App} at {Commit} ({Reason}). Deploying application metadata without altinnNugetVersion.",
+            org,
+            app,
+            shortCommitId,
+            appLibVersion.Status
+        );
+        return null;
     }
 }

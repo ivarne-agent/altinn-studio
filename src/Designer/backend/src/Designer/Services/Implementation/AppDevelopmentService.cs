@@ -353,7 +353,9 @@ public class AppDevelopmentService : IAppDevelopmentService
 
         if (onlyUnReferenced)
         {
+#pragma warning disable CS0618 // Designer still binds data types to tasks through TaskId; v9 apps read TaskIds
             var unReferencedDataTypes = appMetaDataDataTypes.Where(dataType => string.IsNullOrEmpty(dataType.TaskId));
+#pragma warning restore CS0618
             return unReferencedDataTypes.Select(datatype => datatype.Id);
         }
 
@@ -607,7 +609,9 @@ public class AppDevelopmentService : IAppDevelopmentService
     {
         var applicationMetadata = await altinnAppGitRepository.GetApplicationMetadata();
         var dataType = applicationMetadata.DataTypes.Find(dataType => dataType.Id == dataTypeId);
+#pragma warning disable CS0618 // Designer still binds data types to tasks through TaskId; v9 apps read TaskIds
         dataType.TaskId = null;
+#pragma warning restore CS0618
         await altinnAppGitRepository.SaveApplicationMetadata(applicationMetadata);
     }
 

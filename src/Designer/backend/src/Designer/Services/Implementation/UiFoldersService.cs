@@ -343,12 +343,14 @@ public class UiFoldersService : IUiFoldersService
         ApplicationMetadata applicationMetadata = await altinnAppGitRepository.GetApplicationMetadata();
         DataType? dataType = applicationMetadata.DataTypes.Find(type => type.Id == dataTypeId);
         // dataType.taskId != connectedTaskId means that the data type is used by another task, so we should not delete it.
+#pragma warning disable CS0618 // Designer still binds data types to tasks through TaskId; v9 apps read TaskIds
         if (dataType == null || dataType.TaskId != connectedTaskId)
         {
             return;
         }
 
         dataType.TaskId = null;
+#pragma warning restore CS0618
         await altinnAppGitRepository.SaveApplicationMetadata(applicationMetadata);
     }
 

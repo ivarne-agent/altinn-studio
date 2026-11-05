@@ -271,7 +271,7 @@ public class ReleaseServiceTest
             _azureDevOpsBuildClient.Object,
             _releaseRepository.Object,
             _appScopesService.Object,
-            _giteaClient.Object,
+            new GiteaAppVersionService(_giteaClient.Object),
             GetAzureDevOpsSettings(),
             _generalSettings,
             _apiKeyService.Object,
