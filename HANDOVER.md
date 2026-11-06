@@ -19,8 +19,11 @@ Branch `fix/ci-apparmor-docker-build` on the fork `ivarne-agent/altinn-studio` (
     --body-file pr-body.md --attach run1/terminal.gif
   ```
 
-  Opening through the compare link instead: paste `pr-body.md`, then drag `run1/terminal.gif` into the Evidence
-  section in place of the `![…](terminal.gif)` line (or delete that line).
+  Opening through the compare link instead: paste `pr-body.md` as is. Its Evidence image already points at the GIF
+  on the fork branch `evidence/fix-apparmor-docker-build`
+  (https://raw.githubusercontent.com/ivarne-agent/altinn-studio/evidence/fix-apparmor-docker-build/terminal.gif),
+  so nothing needs uploading; `--attach` is optional. That branch also holds this handover, `pr-body.md` and
+  `demo.sh`: https://github.com/ivarne-agent/altinn-studio/tree/evidence/fix-apparmor-docker-build
 
 **Title:** `ci: let container processes signal each other on Ubuntu 26.04 runners`
 
