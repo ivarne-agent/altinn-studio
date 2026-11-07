@@ -21,6 +21,7 @@ public sealed class ApplicationMetadataAnalyzer : DiagnosticAnalyzer
             Diagnostics.Metadata.DuplicateFieldId,
             Diagnostics.Metadata.UnknownFieldDataType,
             Diagnostics.Metadata.AutoDeleteWithDeletionPrevention,
+            Diagnostics.Metadata.TaskIdsNotStrings,
         ];
 
     public override void Initialize(AnalysisContext context)
@@ -66,6 +67,7 @@ public sealed class ApplicationMetadataAnalyzer : DiagnosticAnalyzer
             compilationContext.CancellationToken,
             diagnostics
         );
+        TaskIdsShapeUtils.CollectDiagnostics(appMetadataFiles[0], compilationContext.CancellationToken, diagnostics);
 
         foreach (var diagnostic in diagnostics)
         {

@@ -105,18 +105,28 @@ internal static class MetadataFile
             ReadStringList(dataType.GetPropertyIgnoreCase("allowedContentTypes")),
             allowedContributors,
             taskId,
-            ReadTaskIds(dataType.GetPropertyIgnoreCase("taskIds"))
+            ReadTaskIds(dataType.GetPropertyIgnoreCase("taskIds"), out var unreadableTaskIds),
+            unreadableTaskIds
         );
     }
 
     /// <summary>
-    /// The string and null entries of a <c>taskIds</c> array, or null when it is not an array. The app cannot read
-    /// applicationmetadata.json with any other entry in <c>taskIds</c>, so those are left out.
+    /// The string and null entries of a <c>taskIds</c> array, or null when it is absent, null or not an array. The
+    /// runtime reads <c>taskIds</c> into a <c>List&lt;string&gt;</c> and fails to start on any other value, so a
+    /// <c>taskIds</c> that is not an array or null, and every entry that is not a string or null, is returned in
+    /// <paramref name="unreadable"/> instead.
     /// </summary>
-    private static List<MetadataTaskId>? ReadTaskIds(JsonValue? value)
+    private static List<MetadataTaskId>? ReadTaskIds(JsonValue? value, out List<MetadataJsonValue> unreadable)
     {
-        if (value?.Type != JsonType.Array)
+        unreadable = [];
+        if (value is null || value.Type == JsonType.Null)
         {
+            return null;
+        }
+
+        if (value.Type != JsonType.Array)
+        {
+            unreadable.Add(MetadataJsonValue.Of(value));
             return null;
         }
 
@@ -130,6 +140,10 @@ internal static class MetadataFile
             else if (item.Type == JsonType.Null)
             {
                 list.Add(new MetadataTaskId(null, item.Start, item.End));
+            }
+            else
+            {
+                unreadable.Add(MetadataJsonValue.Of(item));
             }
         }
 
@@ -194,13 +208,18 @@ internal sealed record MetadataDataTypes(List<MetadataDataType> All)
 /// The string and null entries of <c>taskIds</c>, or null when it is absent or not an array. Null or empty binds the
 /// data type to no task.
 /// </param>
+/// <param name="UnreadableTaskIds">
+/// What the runtime cannot read in <c>taskIds</c>: the value itself when it is not an array or null, otherwise every
+/// entry that is not a string or null. Empty when the runtime reads the whole of <c>taskIds</c>.
+/// </param>
 internal sealed record MetadataDataType(
     string Id,
     bool HasClassRef,
     List<string?>? AllowedContentTypes,
     List<string?>? AllowedContributors,
     MetadataTaskId? TaskId,
-    List<MetadataTaskId>? TaskIds
+    List<MetadataTaskId>? TaskIds,
+    List<MetadataJsonValue> UnreadableTaskIds
 );
 
 /// <summary>
@@ -210,3 +229,29 @@ internal sealed record MetadataDataType(
 /// <param name="Start">Where the value starts in the file.</param>
 /// <param name="End">Where the value ends in the file.</param>
 internal sealed record MetadataTaskId(string? Value, int Start, int End);
+
+/// <summary>
+/// A JSON value in <c>applicationmetadata.json</c> that the runtime cannot read where it stands, kept as written so a
+/// diagnostic can quote it.
+/// </summary>
+/// <param name="Json">The value as written in the file, cut short when it is long.</param>
+/// <param name="Type">The JSON type of the value.</param>
+/// <param name="Start">Where the value starts in the file.</param>
+/// <param name="End">Where the value ends in the file.</param>
+internal sealed record MetadataJsonValue(string Json, JsonType Type, int Start, int End)
+{
+    private const int MaxJsonLength = 40;
+
+    internal static MetadataJsonValue Of(JsonValue value)
+    {
+        // End reads the whole value for arrays and objects, which is what the diagnostic span needs.
+        var end = value.End;
+        var json = value.FullJson.Substring(value.Start, end - value.Start);
+        if (json.Length > MaxJsonLength)
+        {
+            json = json.Substring(0, MaxJsonLength) + "…";
+        }
+
+        return new MetadataJsonValue(json, value.Type, value.Start, end);
+    }
+}

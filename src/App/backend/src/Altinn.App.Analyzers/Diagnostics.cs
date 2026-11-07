@@ -122,6 +122,17 @@ public static class Diagnostics
                 + "'preventInstanceDeletionForDays' forbids deleting it for {0} days after it is archived, which "
                 + "also happens when the process ends. The app cannot do both. Remove one of the two settings."
         );
+
+        // An error, since the runtime reads taskIds into a List<string> and fails to start on anything else, which
+        // nothing reports before the first start. '{1}' is the value as written, '{2}' what it is.
+        public static readonly DiagnosticDescriptor TaskIdsNotStrings = Error(
+            "ALTINNAPP0903",
+            Category.Metadata,
+            "taskIds must be a list of task id strings",
+            "Data type '{0}' has {1} in its taskIds, which is {2}. The app reads taskIds as a list of strings, so "
+                + "it does not start with this file. Write each task id as a string, such as [\"Task_1\"], or "
+                + "leave taskIds out to bind the data type to no task."
+        );
     }
 
     internal static class Process

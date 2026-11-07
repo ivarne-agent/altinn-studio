@@ -22,6 +22,7 @@ ALTINNAPP0801 | Authorization | Warning | Service owner authorization could not 
 ALTINNAPP0900 | Metadata | Error | Duplicate presentationFields/dataFields id
 ALTINNAPP0901 | Metadata | Warning | presentationFields/dataFields entry references an unknown data type
 ALTINNAPP0902 | Metadata | Error | autoDeleteOnProcessEnd combined with preventInstanceDeletionForDays
+ALTINNAPP0903 | Metadata | Error | taskIds must be a list of task id strings
 ALTINNAPP1000 | Process | Error | PDF service task has nothing to render
 ALTINNAPP1002 | Process | Warning | PDF service task lists an entry that adds nothing to its PDF
 ALTINNAPP1003 | Process | Error | Task uses the wrong BPMN element
