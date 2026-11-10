@@ -1,4 +1,4 @@
-> **Stacked on #21483**, which moves what the env runtimes share into `internal/cmd/env/stack` and decides which runtime is up from the running containers, and #21483 is stacked on #PRNUMBER, which passes the host's CA bundle to pdf3. Until both merge, the diff here includes them. To see only this pull request's change: [compare](https://github.com/ivarne-agent/altinn-studio/compare/refactor/studioctl-env-shared-runtime...feat/studioctl-localtest-v2-stack).
+> **Stacked on #21483**, which moves what the env runtimes share into `internal/cmd/env/stack` and decides which runtime is up from the running containers, and #21483 is stacked on #21843, which passes the host's CA bundle to pdf3. Until both merge, the diff here includes them. To see only this pull request's change: [compare](https://github.com/ivarne-agent/altinn-studio/compare/refactor/studioctl-env-shared-runtime...feat/studioctl-localtest-v2-stack).
 >
 > **Draft for a shape review.** It cannot be merged as is (see Follow-ups). I'd like feedback on the overall shape: a second `env` runtime driven by an embedded manifest, the localtest container as the front door, and studioctl-server registering the apps it discovers with that front door.
 
@@ -66,26 +66,7 @@ The reader refuses unknown keys, unresolved references, cycles, containers no gr
 
 ### Commits
 
-1. `5d921267d2` feat(devenv): the readiness probe.
-2. `aa000cce42` feat(studioctl): the manifest and its reader.
-3. `f42345e16e` feat(studioctl): the runtime for `env up`, `down`, `reset`, `status` and `logs`.
-4. `68097e38f4` feat(studioctl): running apps against it: the app environment, the registration wait and the dev-server route.
-5. `da549587d7` feat(studioctl-server): registering discovered apps with the front door.
-6. `6226e3aaff` docs(studioctl): the changelog and the bundled skill.
-7. `c84edbc883` feat(devenv): tmpfs mounts, and anonymous volumes removed with their container.
-8. `68dff9ec1d` feat(studioctl-server): an app container registered at its address on the stack's network.
-9. `fe933a6ba4` feat(studioctl): minimal mode, the configurable origin, container mode and cleanup after a failed start.
-10. `e3cd7a05ea` docs(studioctl): the changelog, manifest README and skill for 9.
-11. `4f69df6da9` fix(studioctl-server): registration beside discovery, not inside its refresh.
-12. `26271005cb` fix(studioctl): localtest-v2 runs when its containers run, not when its state file exists.
-13. `038eff492e` docs(studioctl): no references to the research repository's tasks.
-14. `7ecd965d12` feat(studioctl): the monitoring group and the manifest's `files`.
-15. `19926f3202` feat(studioctl): minimal mode's telemetry files.
-16. `e7a96aac14` feat(studioctl): pdf3 takes the host's CA bundle through the shared code.
-17. `15795e6b6e` docs(studioctl): changelog entries and the manifest README formatted.
-18. `f05805430c` test(studioctl): a `localtest` run's app gets localtest's start page links, which localtest-v2 runs leave alone.
-19. `d797f44ac7` docs(studioctl): `docs/localtest-v2.md` with the usage and design docs, and one changelog entry for localtest-v2.
-20. `d9163a934c` style(studioctl): the localtest-v2 comments in sentences.
+One commit, `796106745a`, on top of #21483's and #21843's. It was squashed on 2026-11-10 from the twenty commits of the earlier head `8245c6d714` (devenv's readiness probe; the manifest and its reader; the runtime; running apps against it; studioctl-server's registration; minimal mode, the configurable origin and container mode; the monitoring group; the CA bundle through the shared code; the docs), whose tree it keeps apart from the changelog's PR number.
 
 ### Docs
 
@@ -98,7 +79,7 @@ The reader refuses unknown keys, unresolved references, cycles, containers no gr
 
 ## Evidence
 
-A run on this branch at `8245c6d714`, built with `make dev-install`, on Podman behind a TLS-intercepting proxy, with the pinned images (`sha-ddef433`, pdf3 `tt02`), `STUDIO_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt`, and a `ttd/testapp` copy that creates a PDF on process end. The recording, 73 s, is on the fork branch `studioctl-localtest-v2-stack` with its [transcript](https://raw.githubusercontent.com/ivarne-agent/altinn-studio/evidence/studioctl-localtest-v2-stack/transcript.txt) and [demo script](https://raw.githubusercontent.com/ivarne-agent/altinn-studio/evidence/studioctl-localtest-v2-stack/demo.sh):
+A run on this branch at `8245c6d714`, built with `make dev-install`, whose tree the squashed head `796106745a` keeps apart from the changelog's PR number, on Podman behind a TLS-intercepting proxy, with the pinned images (`sha-ddef433`, pdf3 `tt02`), `STUDIO_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt`, and a `ttd/testapp` copy that creates a PDF on process end. The recording, 73 s, is on the fork branch `studioctl-localtest-v2-stack` with its [transcript](https://raw.githubusercontent.com/ivarne-agent/altinn-studio/evidence/studioctl-localtest-v2-stack/transcript.txt) and [demo script](https://raw.githubusercontent.com/ivarne-agent/altinn-studio/evidence/studioctl-localtest-v2-stack/demo.sh):
 
 ![env up --help with both runtimes, env up -r localtest-v2, the refusal to start localtest beside it, env status, the pdf3 mount, studioctl run, a PDF through process/next, env down](https://raw.githubusercontent.com/ivarne-agent/altinn-studio/evidence/studioctl-localtest-v2-stack/terminal.gif)
 
@@ -114,7 +95,7 @@ A run on this branch at `8245c6d714`, built with `make dev-install`, on Podman b
 
 - `env down` without `-r` stopped localtest-v2.
 
-Not repeated on this head: `--with monitoring` on the running stack, `--minimal`, and the CA bundle variants (an unusable certificate, a bundle without one). Those ran on the earlier build 7f548efa73 of the same change; the CA bundle variants are shown on #PRNUMBER, whose code this runtime calls.
+Not repeated on this head: `--with monitoring` on the running stack, `--minimal`, and the CA bundle variants (an unusable certificate, a bundle without one). Those ran on the earlier build 7f548efa73 of the same change; the CA bundle variants are shown on #21843, whose code this runtime calls.
 
 studioctl-server's tests pass, apart from the 13 `V8Tov9UpgradeTargetFrameworkTests`, which need the .NET 11 SDK and fail the same way without this pull request on a machine with only .NET 10.
 
