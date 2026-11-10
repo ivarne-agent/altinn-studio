@@ -1,0 +1,61 @@
+$ studioctl env up --help      # shared options, then one section per runtime
+Usage: studioctl env up [options]
+Start a local environment.
+Options:
+  -r, --runtime    Runtime: localtest (default: the one running, else localtest)
+  -d, --detach     Run in background (default: true)
+  --open           Open the environment in the browser after starting
+  --json           Output as JSON
+Options for the localtest runtime:
+  --monitoring     Start monitoring stack
+  --pgadmin        Start pgAdmin for the workflow-engine database
+$ studioctl env up --with dialogporten     # a flag no registered runtime defines
+parsing flags: flag provided but not defined: -with
+$ studioctl env up extra-argument           # positional arguments are refused
+invalid flag value: env up takes no arguments, got "extra-argument"
+$ studioctl env up -r nope                  # an unknown runtime
+unsupported runtime: nope (one of localtest)
+$ studioctl env logs                        # nothing runs yet
+env logs: stream localtest logs: environment not running: no containers are running
+$ export STUDIO_CA_BUNDLE=~/proxy-plus-system.pem; studioctl env up --json   # warnings in the JSON, through the shared stack code
+STUDIO_CA_BUNDLE (/home/agent/rt-home/demo-bin/proxy-plus-system.pem): skipping 1 unusable certificate, the environment trusts the rest: line 1: x509: negative serial number
+{"runtime":"localtest","warnings":["STUDIO_CA_BUNDLE (/home/agent/rt-home/demo-bin/proxy-plus-system.pem): skipping 1 unusable certificate, the environment trusts the rest: line 1: x509: negative serial number"],"running
+$ studioctl env status                      # no -r: the runtime whose containers run
+localtest is running.
+Container                     Status   Image
+localtest                     running  ghcr.io/altinn/altinn-studio/runtime-localtest:latest (bdf0e08ff045)
+localtest-pdf3                running  ghcr.io/altinn/altinn-studio/runtime-pdf3-worker:tt02 (9502ec38b589)
+localtest-workflow-engine     running  ghcr.io/altinn/altinn-studio/runtime-workflow-engine-app:tt02 (77320f8556b0)
+localtest-workflow-engine-db  running  postgres:18.3 (0e44620f2c37)
+$ studioctl env status --json | head -c 400
+{"containers":[{"name":"localtest","image":"ghcr.io/altinn/altinn-studio/runtime-localtest:latest","imageId":"sha256:bdf0e08ff045a12413214f315aa6bf6cd13df1422cf539d627df5ea15deca483","status":"running"},{"name":"localtes
+$ docker inspect localtest-pdf3 --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{end}}'   # the CA bundle, now from stack/cabundle.go
+/home/agent/rt-home/data/infra/ca-bundle-8a7b85cf4234bc39.pem -> /tmp/studio-ca-bundle.pem
+$ studioctl env down
+removed 0/5 | failed 0 | active 5 | elapsed 1s
+removed 0/5 | failed 0 | active 5 | elapsed 1s
+removed 0/5 | failed 0 | active 5 | elapsed 1s
+removed 0/5 | failed 0 | active 5 | elapsed 1s
+removed 0/5 | failed 0 | active 5 | elapsed 1s
+localtest-workflow-engine    [ok] removed                                             t 1s [====================] 100%
+removed 1/5 | failed 0 | active 4 | elapsed 1s
+localtest-pdf3               [ok] removed                                             t 1s [====================] 100%
+localtest-workflow-engine    [ok] removed                                             t 1s [====================] 100%
+removed 2/5 | failed 0 | active 3 | elapsed 1s
+localtest-pdf3               [ok] removed                                             t 1s [====================] 100%
+localtest-workflow-engine    [ok] removed                                             t 1s [====================] 100%
+removed 2/5 | failed 0 | active 3 | elapsed 1s
+localtest-pdf3               [ok] removed                                             t 1s [====================] 100%
+localtest-workflow-engine    [ok] removed                                             t 1s [====================] 100%
+removed 2/5 | failed 0 | active 3 | elapsed 1s
+localtest-pdf3               [ok] removed                                             t 1s [====================] 100%
+localtest-workflow-engine    [ok] removed                                             t 1s [====================] 100%
+localtest-workflow-engine-db [ok] removed                                             t 1s [====================] 100%
+removed 3/5 | failed 0 | active 2 | elapsed 1s
+localtest                    [ok] removed                                             t 1s [====================] 100%
+localtest-pdf3               [ok] removed                                             t 1s [====================] 100%
+localtest-workflow-engine    [ok] removed                                             t 1s [====================] 100%
+localtest-workflow-engine-db [ok] removed                                             t 1s [====================] 100%
+altinntestlocal_network      [ok] removed                                             t 1s [====================] 100%
+removed 5/5 | failed 0 | active 0 | elapsed 1s
+Environment stopped
