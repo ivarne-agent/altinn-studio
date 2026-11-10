@@ -1,0 +1,1 @@
+STUDIO_CA_BUNDLE=/tmp/studio-ca-bundle.pem

@@ -1,0 +1,1 @@
+{"runtime":"localtest","warnings":["STUDIO_CA_BUNDLE holds no usable certificate: /tmp/claude-1000/-home-agent-code/307f88de-4fa8-4033-9394-a623642ae109/scratchpad/malformed-only.pem: 1 certificate, none usable; line 1: x509: malformed certificate; the environment starts without the CA bundle"],"running":true,"started":true,"alreadyRunning":false}

@@ -1,0 +1,1 @@
+/home/agent/cab-home/data/infra/ca-bundle-8a7b85cf4234bc39.pem -> /tmp/studio-ca-bundle.pem ro=true

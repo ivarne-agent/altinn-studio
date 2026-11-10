@@ -1,0 +1,1 @@
+[38;5;11mstat STUDIO_CA_BUNDLE: stat /nonexistent.pem: no such file or directory; the environment starts without the CA bundle[0m

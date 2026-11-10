@@ -1,0 +1,5 @@
+token for user 20001: 789 chars
+instance: 520001/46c4a799-a75b-4cca-9426-7d6a0bcb3e75
+PUT process/next -> HTTP 200
+PDF data element 525eefb7-bcc1-4e55-8aca-4fecc9cda3f4: 23396 bytes, header %PDF-1.4
+fonts: /BaseFont /AAAAAA+Altinn-DIN /BaseFont /BAAAAA+Altinn-DIN-Bold /BaseFont /CAAAAA+Altinn-DIN-Italic 

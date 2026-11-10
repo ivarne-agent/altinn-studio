@@ -1,0 +1,15 @@
+--- entrypoint=pdf3/docker-entrypoint.sh bundle=negative-plus-system.pem
+worker would start now (exit 0)
+exit=0
+--- entrypoint=pdf3/docker-entrypoint.sh bundle=malformed-only.pem
+certutil: could not decode certificate: SEC_ERROR_BAD_DER: security library: improperly formatted DER-encoded message.
+pdf3 worker: skipped certificate 1 of STUDIO_CA_BUNDLE (/tmp/b.pem), which certutil cannot import
+pdf3 worker: installed 0 of 1 certificates from STUDIO_CA_BUNDLE
+worker would start now (exit 0)
+exit=0
+--- entrypoint=main bundle=negative-plus-system.pem
+worker would start now (exit 0)
+exit=0
+--- entrypoint=main bundle=malformed-only.pem
+certutil: could not decode certificate: SEC_ERROR_BAD_DER: security library: improperly formatted DER-encoded message.
+exit=255

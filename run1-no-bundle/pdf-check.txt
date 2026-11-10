@@ -1,0 +1,4 @@
+token for user 20001: 789 chars
+instance: 520001/f718b242-f318-4c2e-a311-cc4ba16a7172
+PUT process/next -> HTTP 500
+body: {"title":"Process next failed.","status":500,"detail":"Pdf generation failed"}

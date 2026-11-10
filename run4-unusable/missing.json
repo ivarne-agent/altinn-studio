@@ -1,0 +1,1 @@
+{"runtime":"localtest","warnings":["stat STUDIO_CA_BUNDLE: stat /nonexistent.pem: no such file or directory; the environment starts without the CA bundle"],"running":true,"started":true,"alreadyRunning":false}
