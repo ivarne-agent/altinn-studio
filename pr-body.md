@@ -49,7 +49,7 @@ The code sits in localtest's `components` package, since that is where pdf3's co
 
 ## Evidence
 
-Runs on this branch at `02d46a4c5c`, built with `make dev-install`, on a Linux sandbox whose network goes through a TLS-intercepting proxy (Podman behind the `docker` command). The app is a copy of the `ttd/testapp` fixture on app-lib 8.12.15 with `enablePdfCreation` on its data type, so `process/next` out of `Task_1` renders a PDF through pdf3. A script fetches a test-user token, creates an instance, calls `PUT process/next` and downloads the `ref-data-as-pdf` element.
+Runs on this branch at `02d46a4c5c`, built with `make dev-install`, whose tree the squashed head `4dd5765ce3` keeps apart from the changelog's PR number, on a Linux sandbox whose network goes through a TLS-intercepting proxy (Podman behind the `docker` command). The app is a copy of the `ttd/testapp` fixture on app-lib 8.12.15 with `enablePdfCreation` on its data type, so `process/next` out of `Task_1` renders a PDF through pdf3. A script fetches a test-user token, creates an instance, calls `PUT process/next` and downloads the `ref-data-as-pdf` element.
 
 **Without a bundle** (`STUDIO_CA_BUNDLE` unset), pdf3 has no mount, and `process/next` fails as before:
 
