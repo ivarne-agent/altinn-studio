@@ -637,11 +637,6 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
         _stagedCompleteConfirmation = true;
     }
 
-    /// <summary>
-    /// The data values a save would send: what the app has changed in <c>Instance.DataValues</c>.
-    /// </summary>
-    internal IReadOnlyDictionary<string, string?> StagedInstanceDataValues => GetInstanceChanges().DataValues;
-
     internal bool StagedCompleteConfirmation => _stagedCompleteConfirmation;
 
     /// <summary>
