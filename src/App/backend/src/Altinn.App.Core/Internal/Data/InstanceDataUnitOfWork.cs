@@ -643,10 +643,7 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
     /// Whether a save would write a data element change, a change the app made on <see cref="Instance"/> or a
     /// complete confirmation. Lock statuses, instance deletion and process state are not checked.
     /// </summary>
-    internal bool HasStagedChanges() =>
-        GetDataElementChanges(false).AllChanges.Count > 0
-        || GetInstanceChanges().HasChanges
-        || _stagedCompleteConfirmation;
+    internal bool HasStagedChanges() => GetDataElementChanges(false).HasChanges || _stagedCompleteConfirmation;
 
     // Process state is staged through UpdateProcessState, and elements through the data element members.
     private static readonly HashSet<string> _instancePropertiesSavedSeparately =
@@ -674,7 +671,10 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
     /// when the app changed something a save cannot send, or a key derived from <c>dataFields</c> or
     /// <c>presentationFields</c>, which the save would overwrite
     /// </exception>
-    private InstanceChanges GetInstanceChanges()
+    private (
+        InstanceChanges Instance,
+        Dictionary<DataElementIdentifier, DataElementMetadataChange> DataElementMetadata
+    ) GetInstanceChanges()
     {
         Instance previous =
             JsonSerializer.Deserialize<Instance>(_instanceSnapshot)
@@ -712,7 +712,7 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
             }
         }
 
-        return new InstanceChanges(dataValues, presentationTexts, dataElementMetadata);
+        return (new InstanceChanges(dataValues, presentationTexts), dataElementMetadata);
     }
 
     private static Dictionary<string, string?> GetChangedInstanceFields(
@@ -883,7 +883,18 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
         }
     }
 
+    /// <remarks>
+    /// The result also holds what the app changed on <see cref="Instance"/> since Storage last returned it, which a
+    /// save of the result sends.
+    /// </remarks>
     public DataElementChanges GetDataElementChanges(bool initializeAltinnRowId)
+    {
+        List<DataElementChange> changes = GetChangedDataElements(initializeAltinnRowId);
+        var (instanceChanges, dataElementMetadataChanges) = GetInstanceChanges();
+        return new DataElementChanges(changes, instanceChanges, dataElementMetadataChanges);
+    }
+
+    private List<DataElementChange> GetChangedDataElements(bool initializeAltinnRowId)
     {
         if (HasAbandonIssues)
         {
@@ -986,7 +997,7 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
         }
         changes.AddRange(_changesForDeletion);
 
-        return new DataElementChanges(changes);
+        return changes;
     }
 
     private static void ValidateBinaryData(DataType dataType, string contentType, ReadOnlyMemory<byte> bytes)
@@ -1069,13 +1080,12 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
     {
         ValidateCanSaveChangesOrThrow(workflowOwned);
 
-        InstanceChanges instanceChanges = GetInstanceChanges();
-        var mutationPlan = BuildAggregateMutationPlan(changes, instanceChanges.DataElementMetadata);
+        var mutationPlan = BuildAggregateMutationPlan(changes);
         mutationPlan.Request.ExpectedProcessStatus = expectedProcessStatus;
         ApplyStagedProcessState(mutationPlan.Request);
         ApplyStagedInstanceDeletion(mutationPlan.Request);
         ApplyStagedCompleteConfirmation(mutationPlan.Request);
-        ApplyInstanceFieldChanges(mutationPlan.Request, instanceChanges);
+        ApplyInstanceFieldChanges(mutationPlan.Request, changes.InstanceChanges);
         if (!mutationPlan.HasMutations)
         {
             return WorkflowAggregateSaveOutcome.NothingToSave;
@@ -1171,11 +1181,10 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
         }
     }
 
-    private AggregateMutationPlan BuildAggregateMutationPlan(
-        DataElementChanges changes,
-        IReadOnlyDictionary<DataElementIdentifier, DataElementMetadataChange> dataElementMetadata
-    )
+    private AggregateMutationPlan BuildAggregateMutationPlan(DataElementChanges changes)
     {
+        IReadOnlyDictionary<DataElementIdentifier, DataElementMetadataChange> dataElementMetadata =
+            changes.DataElementMetadataChanges;
         var request = new StorageInstanceMutationRequest();
         var contentParts = new Dictionary<string, StorageInstanceMutationContent>(StringComparer.Ordinal);
         var createdChanges = new List<DataElementChange>();
@@ -1859,27 +1868,6 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
         return currentUserMethod ?? defaultMethod;
     }
 
-    // A null property is left unchanged by the save.
-    private sealed record DataElementMetadataChange(
-        List<string>? Tags,
-        List<KeyValueEntry>? Metadata,
-        List<KeyValueEntry>? UserDefinedMetadata,
-        List<Guid>? Refs,
-        string? Filename
-    )
-    {
-        public static readonly DataElementMetadataChange None = new(null, null, null, null, null);
-    }
-
-    private sealed record InstanceChanges(
-        Dictionary<string, string?> DataValues,
-        Dictionary<string, string?> PresentationTexts,
-        Dictionary<DataElementIdentifier, DataElementMetadataChange> DataElementMetadata
-    )
-    {
-        public bool HasChanges => DataValues.Count > 0 || PresentationTexts.Count > 0 || DataElementMetadata.Count > 0;
-    }
-
     private sealed record AggregateMutationPlan(
         StorageInstanceMutationRequest Request,
         IReadOnlyDictionary<string, StorageInstanceMutationContent> ContentParts,
@@ -2015,8 +2003,8 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
     internal void VerifyUnchangedSincePreviousChanges(DataElementChanges previousChanges)
     {
         using var activity = _telemetry?.StartVerifyUnchangedSincePreviousChanges();
-        var changes = GetDataElementChanges(initializeAltinnRowId: false);
-        if (changes.AllChanges.Count != previousChanges.AllChanges.Count)
+        List<DataElementChange> changes = GetChangedDataElements(initializeAltinnRowId: false);
+        if (changes.Count != previousChanges.AllChanges.Count)
         {
             throw new InvalidOperationException("Number of data elements have changed by validators");
         }
@@ -2024,7 +2012,7 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
         foreach (var previousChange in previousChanges.AllChanges)
         {
             var currentChange =
-                changes.AllChanges.FirstOrDefault(c => c.DataElement?.Id == previousChange.DataElement?.Id)
+                changes.FirstOrDefault(c => c.DataElement?.Id == previousChange.DataElement?.Id)
                 ?? throw new InvalidOperationException("Number of data elements have changed by validators");
 
             var equal = (currentChange, previousChange) switch
@@ -2048,16 +2036,17 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
 
         // The save took a new snapshot of the instance, so anything that differs from it now was changed by validators.
         InstanceChanges instanceChanges;
+        Dictionary<DataElementIdentifier, DataElementMetadataChange> dataElementMetadataChanges;
         try
         {
-            instanceChanges = GetInstanceChanges();
+            (instanceChanges, dataElementMetadataChanges) = GetInstanceChanges();
         }
         catch (InvalidOperationException exception)
         {
             throw new InvalidOperationException("The instance has been changed by validators", exception);
         }
 
-        if (instanceChanges.HasChanges)
+        if (instanceChanges.HasChanges || dataElementMetadataChanges.Count > 0)
         {
             throw new InvalidOperationException(
                 "The instance has been changed by validators: "
@@ -2066,9 +2055,7 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
                         [
                             .. instanceChanges.DataValues.Keys.Select(key => $"data value '{key}'"),
                             .. instanceChanges.PresentationTexts.Keys.Select(key => $"presentation text '{key}'"),
-                            .. instanceChanges.DataElementMetadata.Keys.Select(id =>
-                                $"metadata of data element {id.Id}"
-                            ),
+                            .. dataElementMetadataChanges.Keys.Select(id => $"metadata of data element {id.Id}"),
                         ]
                     )
             );

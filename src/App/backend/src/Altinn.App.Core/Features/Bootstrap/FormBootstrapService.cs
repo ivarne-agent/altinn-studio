@@ -632,7 +632,11 @@ internal sealed class FormBootstrapService
             return;
         }
 
-        var filteredChanges = new DataElementChanges(persistableChanges);
+        var filteredChanges = new DataElementChanges(
+            persistableChanges,
+            changes.InstanceChanges,
+            changes.DataElementMetadataChanges
+        );
         try
         {
             await dataAccessor.SaveChanges(filteredChanges);

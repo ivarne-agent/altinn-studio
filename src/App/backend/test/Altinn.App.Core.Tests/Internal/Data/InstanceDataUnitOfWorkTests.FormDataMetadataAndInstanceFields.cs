@@ -585,6 +585,25 @@ public sealed partial class InstanceDataUnitOfWorkTests
         Assert.Contains("Instance.DueBefore was changed", exception.InnerException?.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task GetDataElementChanges_HoldsTheInstanceChanges_AndTheSaveSendsOnlyThose()
+    {
+        await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
+        setup.DataMutator.Instance.DataValues = new() { ["collected"] = "yes" };
+        setup.DataMutator.GetDataElement(setup.DataElement).Tags = ["signed"];
+
+        DataElementChanges changes = setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false);
+        setup.DataMutator.Instance.PresentationTexts = new() { ["afterwards"] = "not collected" };
+        await setup.DataMutator.SaveChanges(changes);
+
+        Assert.Empty(changes.AllChanges);
+        Assert.Equal(new Dictionary<string, string?> { ["collected"] = "yes" }, changes.InstanceChanges.DataValues);
+        Assert.Equal(["signed"], Assert.Single(changes.DataElementMetadataChanges).Value.Tags);
+        StorageInstanceMutationRequest mutation = GetSingleMutation(setup);
+        Assert.Equal(new Dictionary<string, string?> { ["collected"] = "yes" }, mutation.DataValues);
+        Assert.Empty(mutation.PresentationTexts);
+    }
+
     private static void SetAllMetadata(DataElement dataElement, Guid referencedId)
     {
         dataElement.Tags = ["signed"];

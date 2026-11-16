@@ -9,9 +9,16 @@ namespace Altinn.App.Core.Models;
 /// </summary>
 public sealed class DataElementChanges
 {
-    internal DataElementChanges(IReadOnlyList<DataElementChange> allChanges)
+    internal DataElementChanges(
+        IReadOnlyList<DataElementChange> allChanges,
+        InstanceChanges? instanceChanges = null,
+        IReadOnlyDictionary<DataElementIdentifier, DataElementMetadataChange>? dataElementMetadataChanges = null
+    )
     {
         AllChanges = allChanges;
+        InstanceChanges = instanceChanges ?? InstanceChanges.None;
+        DataElementMetadataChanges =
+            dataElementMetadataChanges ?? new Dictionary<DataElementIdentifier, DataElementMetadataChange>();
     }
 
     /// <summary>
@@ -28,6 +35,22 @@ public sealed class DataElementChanges
     /// Get changes to attachments elements
     /// </summary>
     public IEnumerable<BinaryDataChange> BinaryDataChanges => AllChanges.OfType<BinaryDataChange>();
+
+    /// <summary>
+    /// The data values and presentation texts changed on the instance
+    /// </summary>
+    internal InstanceChanges InstanceChanges { get; }
+
+    /// <summary>
+    /// The tags, metadata, user-defined metadata, refs and filename changed on existing data elements
+    /// </summary>
+    internal IReadOnlyDictionary<DataElementIdentifier, DataElementMetadataChange> DataElementMetadataChanges { get; }
+
+    /// <summary>
+    /// Whether a save of these changes writes anything
+    /// </summary>
+    internal bool HasChanges =>
+        AllChanges.Count > 0 || InstanceChanges.HasChanges || DataElementMetadataChanges.Count > 0;
 }
 
 /// <summary>
