@@ -1178,19 +1178,20 @@ public class WorkflowEngineCallbackControllerTests
 
     [Fact]
     public Task ExecuteCommand_ServiceTaskDefersAfterSettingADataValue_ReturnsNonRetryableProblem() =>
-        AssertDeferralAfterStagingReturnsNonRetryableProblem((mutator, _) => mutator.SetDataValue("status", "sent"));
+        AssertDeferralAfterStagingReturnsNonRetryableProblem(
+            (mutator, _) => (mutator.Instance.DataValues ??= [])["status"] = "sent"
+        );
 
     [Fact]
     public Task ExecuteCommand_ServiceTaskDefersAfterSettingAPresentationText_ReturnsNonRetryableProblem() =>
         AssertDeferralAfterStagingReturnsNonRetryableProblem(
-            (mutator, _) => mutator.SetPresentationText("status", "Sent")
+            (mutator, _) => (mutator.Instance.PresentationTexts ??= [])["status"] = "Sent"
         );
 
     [Fact]
     public Task ExecuteCommand_ServiceTaskDefersAfterUpdatingElementMetadata_ReturnsNonRetryableProblem() =>
         AssertDeferralAfterStagingReturnsNonRetryableProblem(
-            (mutator, dataElement) =>
-                mutator.UpdateDataElementMetadata(dataElement, new DataElementMetadataUpdate { Tags = ["sent"] })
+            (mutator, dataElement) => mutator.GetDataElement(dataElement).Tags = ["sent"]
         );
 
     [Fact]

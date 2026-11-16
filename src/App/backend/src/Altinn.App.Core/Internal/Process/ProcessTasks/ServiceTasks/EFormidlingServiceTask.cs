@@ -184,10 +184,7 @@ internal sealed class EFormidlingServiceTask : IServiceTask
         // Record ownership after the send: the value is staged on the unit of work and commits with
         // this callback's version-fenced workflow-owned save. If that save fails the stage retries,
         // and the retry resumes/no-ops the already-sent message before staging the owner again.
-        context.InstanceDataMutator.SetDataValue(
-            EformidlingConstants.ShipmentOwnerWorkflowIdDataValueKey,
-            context.WorkflowId.ToString()
-        );
+        SetDataValue(context, EformidlingConstants.ShipmentOwnerWorkflowIdDataValueKey, context.WorkflowId.ToString());
 
         return StageResult.Completed();
     }
@@ -388,10 +385,19 @@ internal sealed class EFormidlingServiceTask : IServiceTask
     /// </remarks>
     private static void RecordShipmentStatus(StageContext context, EFormidlingShipmentStatus status)
     {
-        context.InstanceDataMutator.SetDataValue(
+        SetDataValue(
+            context,
             EformidlingConstants.ShipmentStatusDataValueKey,
             status.Status ?? status.State.ToString()
         );
+    }
+
+    // The save sends the instance's changed data values.
+    private static void SetDataValue(StageContext context, string key, string value)
+    {
+        Instance instance = context.InstanceDataMutator.Instance;
+        instance.DataValues ??= [];
+        instance.DataValues[key] = value;
     }
 
     /// <summary>

@@ -11,6 +11,13 @@ namespace Altinn.App.Core.Features;
 /// Extension of the IInstanceDataAccessor that allows for adding, updating and removing data elements,
 /// and also indicate that it is OK to mutate the models
 /// </summary>
+/// <remarks>
+/// Changes to <see cref="IInstanceDataAccessor.Instance"/> are saved too: its <c>DataValues</c> and
+/// <c>PresentationTexts</c>, and the <c>Tags</c>, <c>Metadata</c>, <c>UserDefinedMetadata</c>, <c>Refs</c> and
+/// <c>Filename</c> of its data elements and of the elements this mutator adds. The save throws for a change to
+/// anything else on the instance, and for a key that <c>dataFields</c> or <c>presentationFields</c> in
+/// applicationmetadata.json derives.
+/// </remarks>
 public interface IInstanceDataMutator : IInstanceDataAccessor
 {
     /// <summary>
@@ -104,23 +111,6 @@ public interface IInstanceDataMutator : IInstanceDataAccessor
     /// <returns>The element's form data, the object that <see cref="IInstanceDataAccessor.GetFormData"/> returns</returns>
     Task<T> ReplaceFormData<T>(DataElementIdentifier dataElementIdentifier, T model)
         where T : class;
-
-    /// <summary>
-    /// Sets tags, metadata, user-defined metadata, refs or the filename of a data element.
-    /// </summary>
-    void UpdateDataElementMetadata(DataElementIdentifier dataElementIdentifier, DataElementMetadataUpdate update);
-
-    /// <summary>
-    /// Sets a data value on the instance; null or empty removes the key.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">when the key is derived from <c>dataFields</c> in applicationmetadata.json</exception>
-    void SetDataValue(string key, string? value);
-
-    /// <summary>
-    /// Sets a presentation text on the instance; null or empty removes the key.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">when the key is derived from <c>presentationFields</c> in applicationmetadata.json</exception>
-    void SetPresentationText(string key, string? value);
 
     /// <summary>
     /// Stop processing the request with current changes and return a BadRequest with the following issues

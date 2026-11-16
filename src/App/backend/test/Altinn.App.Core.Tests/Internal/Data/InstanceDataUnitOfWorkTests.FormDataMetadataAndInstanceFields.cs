@@ -189,99 +189,59 @@ public sealed partial class InstanceDataUnitOfWorkTests
     }
 
     [Fact]
-    public async Task UpdateDataElementMetadata_OnAnExistingElement_SendsAMetadataOnlyUpdate()
+    public async Task ChangedElementMetadata_OnAnExistingElement_SendsAMetadataOnlyUpdate()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
         var referencedId = Guid.NewGuid();
 
-        setup.DataMutator.UpdateDataElementMetadata(
-            setup.DataElement,
-            new DataElementMetadataUpdate
-            {
-                Tags = ["signed"],
-                Metadata = [new KeyValueEntry { Key = "archive", Value = "yes" }],
-                UserDefinedMetadata = [new KeyValueEntry { Key = "case", Value = "42" }],
-                Refs = [referencedId],
-                Filename = "renamed.json",
-            }
-        );
-        await setup.DataMutator.SaveChanges(setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false));
+        SetAllMetadata(setup.DataMutator.GetDataElement(setup.DataElement), referencedId);
+        await SaveChanges(setup);
 
         StorageInstanceMutationUpdateDataElement update = Assert.Single(GetSingleMutation(setup).UpdateDataElements);
         Assert.Equal(Guid.Parse(setup.DataElement.Id), update.DataElementId);
         Assert.Null(update.ContentPartName);
         Assert.Null(update.Locked);
-        Assert.Equal(["signed"], update.Tags);
-        Assert.Equal([("archive", "yes")], update.Metadata?.Select(entry => (entry.Key, entry.Value)));
-        Assert.Equal([("case", "42")], update.UserDefinedMetadata?.Select(entry => (entry.Key, entry.Value)));
-        Assert.Equal([referencedId], update.Refs);
-        Assert.Equal("renamed.json", update.Filename);
+        AssertAllMetadata(
+            update.Tags,
+            update.Metadata,
+            update.UserDefinedMetadata,
+            update.Refs,
+            update.Filename,
+            referencedId
+        );
     }
 
     [Fact]
-    public async Task UpdateDataElementMetadata_OnAnExistingElement_SavesWithTheDataTypesAuthenticationMethod()
+    public async Task ChangedElementMetadata_SendsOnlyTheChangedProperties()
+    {
+        await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
+
+        setup.DataMutator.GetDataElement(setup.DataElement).Tags.Add("signed");
+        await SaveChanges(setup);
+
+        StorageInstanceMutationUpdateDataElement update = Assert.Single(GetSingleMutation(setup).UpdateDataElements);
+        Assert.Equal(["signed"], update.Tags);
+        Assert.Null(update.Metadata);
+        Assert.Null(update.UserDefinedMetadata);
+        Assert.Null(update.Refs);
+        Assert.Null(update.Filename);
+    }
+
+    [Fact]
+    public async Task ChangedElementMetadata_OnAnExistingElement_SavesWithTheDataTypesAuthenticationMethod()
     {
         AuthenticationResolutionSetup setup = CreateAuthenticationResolutionSetup(1);
         StorageAuthenticationMethod method = StorageAuthenticationMethod.ServiceOwner("scope:a");
         setup.UnitOfWork.OverrideAuthenticationMethod(setup.DataTypes[0], method);
 
-        setup.UnitOfWork.UpdateDataElementMetadata(
-            setup.DataElements[0],
-            new DataElementMetadataUpdate { Tags = ["signed"] }
-        );
+        setup.UnitOfWork.GetDataElement(setup.DataElements[0]).Tags = ["signed"];
         await setup.UnitOfWork.SaveChanges(setup.UnitOfWork.GetDataElementChanges(initializeAltinnRowId: false));
 
         Assert.Same(method, setup.AuthenticationMethod);
     }
 
     [Fact]
-    public async Task UpdateDataElementMetadata_ShowsTheValuesOnTheInstanceBeforeTheSave()
-    {
-        await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
-        var referencedId = Guid.NewGuid();
-
-        setup.DataMutator.UpdateDataElementMetadata(
-            setup.DataElement,
-            new DataElementMetadataUpdate
-            {
-                Tags = ["signed"],
-                Metadata = [new KeyValueEntry { Key = "archive", Value = "yes" }],
-                UserDefinedMetadata = [new KeyValueEntry { Key = "case", Value = "42" }],
-                Refs = [referencedId],
-                Filename = "renamed.json",
-            }
-        );
-
-        DataElement dataElement = setup.DataMutator.GetDataElement(setup.DataElement);
-        Assert.Equal(["signed"], dataElement.Tags);
-        Assert.Equal([("archive", "yes")], dataElement.Metadata?.Select(entry => (entry.Key, entry.Value)));
-        Assert.Equal([("case", "42")], dataElement.UserDefinedMetadata?.Select(entry => (entry.Key, entry.Value)));
-        Assert.Equal([referencedId], dataElement.Refs);
-        Assert.Equal("renamed.json", dataElement.Filename);
-    }
-
-    [Fact]
-    public async Task UpdateDataElementMetadata_ChangesToTheCallersListsAfterTheCall_AreNotSaved()
-    {
-        await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
-        List<string> tags = ["signed"];
-        var metadataEntry = new KeyValueEntry { Key = "archive", Value = "yes" };
-
-        setup.DataMutator.UpdateDataElementMetadata(
-            setup.DataElement,
-            new DataElementMetadataUpdate { Tags = tags, Metadata = [metadataEntry] }
-        );
-        tags.Add("added after the call");
-        metadataEntry.Value = "changed after the call";
-        await setup.DataMutator.SaveChanges(setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false));
-
-        StorageInstanceMutationUpdateDataElement update = Assert.Single(GetSingleMutation(setup).UpdateDataElements);
-        Assert.Equal(["signed"], update.Tags);
-        Assert.Equal([("archive", "yes")], update.Metadata?.Select(entry => (entry.Key, entry.Value)));
-    }
-
-    [Fact]
-    public async Task UpdateDataElementMetadata_WithAContentUpdate_SendsOneUpdateItem()
+    public async Task ChangedElementMetadata_WithAContentUpdate_SendsOneUpdateItem()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
         var referencedId = Guid.NewGuid();
@@ -291,39 +251,29 @@ public sealed partial class InstanceDataUnitOfWorkTests
             "updated"u8.ToArray()
         );
 
-        setup.DataMutator.UpdateDataElementMetadata(
-            setup.DataElement,
-            new DataElementMetadataUpdate
-            {
-                Tags = ["signed"],
-                Metadata = [new KeyValueEntry { Key = "archive", Value = "yes" }],
-                UserDefinedMetadata = [new KeyValueEntry { Key = "case", Value = "42" }],
-                Refs = [referencedId],
-                Filename = "renamed.json",
-            }
-        );
-        await setup.DataMutator.SaveChanges(setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false));
+        SetAllMetadata(setup.DataMutator.GetDataElement(setup.DataElement), referencedId);
+        await SaveChanges(setup);
 
         StorageInstanceMutationUpdateDataElement update = Assert.Single(GetSingleMutation(setup).UpdateDataElements);
         Assert.NotNull(update.ContentPartName);
-        Assert.Equal(["signed"], update.Tags);
-        Assert.Equal([("archive", "yes")], update.Metadata?.Select(entry => (entry.Key, entry.Value)));
-        Assert.Equal([("case", "42")], update.UserDefinedMetadata?.Select(entry => (entry.Key, entry.Value)));
-        Assert.Equal([referencedId], update.Refs);
-        Assert.Equal("renamed.json", update.Filename);
+        AssertAllMetadata(
+            update.Tags,
+            update.Metadata,
+            update.UserDefinedMetadata,
+            update.Refs,
+            update.Filename,
+            referencedId
+        );
     }
 
     [Fact]
-    public async Task UpdateDataElementMetadata_WithALockStatus_SendsOneUpdateItem()
+    public async Task ChangedElementMetadata_WithALockStatus_SendsOneUpdateItem()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
         setup.DataMutator.LockDataElementsForDataType(setup.DataElement.DataType);
 
-        setup.DataMutator.UpdateDataElementMetadata(
-            setup.DataElement,
-            new DataElementMetadataUpdate { Tags = ["signed"] }
-        );
-        await setup.DataMutator.SaveChanges(setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false));
+        setup.DataMutator.GetDataElement(setup.DataElement).Tags = ["signed"];
+        await SaveChanges(setup);
 
         StorageInstanceMutationUpdateDataElement update = Assert.Single(GetSingleMutation(setup).UpdateDataElements);
         Assert.Null(update.ContentPartName);
@@ -333,9 +283,10 @@ public sealed partial class InstanceDataUnitOfWorkTests
     }
 
     [Fact]
-    public async Task UpdateDataElementMetadata_OnAnAddedElement_SendsTheValuesWithTheCreate()
+    public async Task ElementMetadata_OnAnAddedElement_IsSentWithTheCreate()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
+        var referencedId = Guid.Parse(setup.DataElement.Id);
         BinaryDataChange added = setup.DataMutator.AddBinaryDataElement(
             "receipt",
             "application/json",
@@ -344,114 +295,65 @@ public sealed partial class InstanceDataUnitOfWorkTests
             metadata: [new KeyValueEntry { Key = "from-add", Value = "1" }]
         );
 
-        setup.DataMutator.UpdateDataElementMetadata(
-            added.DataElementIdentifier,
-            new DataElementMetadataUpdate
-            {
-                Tags = ["signed"],
-                Metadata = [new KeyValueEntry { Key = "from-update", Value = "2" }],
-                UserDefinedMetadata = [new KeyValueEntry { Key = "case", Value = "42" }],
-                Refs = [Guid.Parse(setup.DataElement.Id)],
-                Filename = "named.json",
-            }
-        );
-        await setup.DataMutator.SaveChanges(setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false));
+        SetAllMetadata(added.DataElement!, referencedId);
+        await SaveChanges(setup);
 
         StorageInstanceMutationRequest mutation = GetSingleMutation(setup);
         Assert.Empty(mutation.UpdateDataElements);
         StorageInstanceMutationCreateDataElement create = Assert.Single(mutation.CreateDataElements);
-        Assert.Equal(["signed"], create.Tags);
-        Assert.Equal([("from-update", "2")], create.Metadata?.Select(entry => (entry.Key, entry.Value)));
-        Assert.Equal([("case", "42")], create.UserDefinedMetadata?.Select(entry => (entry.Key, entry.Value)));
-        Assert.Equal([Guid.Parse(setup.DataElement.Id)], create.Refs);
-        Assert.Equal("named.json", create.Filename);
-    }
-
-    public static TheoryData<DataElementMetadataUpdate> SecondMetadataUpdates =>
-        new()
-        {
-            new DataElementMetadataUpdate { Tags = ["second"] },
-            new DataElementMetadataUpdate { Filename = "second.json" },
-        };
-
-    [Theory]
-    [MemberData(nameof(SecondMetadataUpdates))]
-    public async Task UpdateDataElementMetadata_CalledTwice_SendsTheLastValueOfEachProperty(
-        DataElementMetadataUpdate second
-    )
-    {
-        await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
-        var first = new DataElementMetadataUpdate
-        {
-            Tags = ["first"],
-            Metadata = [new KeyValueEntry { Key = "archive", Value = "yes" }],
-            UserDefinedMetadata = [new KeyValueEntry { Key = "case", Value = "42" }],
-            Refs = [Guid.NewGuid()],
-            Filename = "first.json",
-        };
-
-        setup.DataMutator.UpdateDataElementMetadata(setup.DataElement, first);
-        setup.DataMutator.UpdateDataElementMetadata(setup.DataElement, second);
-        await setup.DataMutator.SaveChanges(setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false));
-
-        StorageInstanceMutationUpdateDataElement update = Assert.Single(GetSingleMutation(setup).UpdateDataElements);
-        Assert.Equal(second.Tags ?? first.Tags, update.Tags);
-        Assert.Equal(
-            (second.Metadata ?? first.Metadata)!.Select(entry => (entry.Key, entry.Value)),
-            update.Metadata?.Select(entry => (entry.Key, entry.Value))
+        AssertAllMetadata(
+            create.Tags,
+            create.Metadata,
+            create.UserDefinedMetadata,
+            create.Refs,
+            create.Filename,
+            referencedId
         );
-        Assert.Equal(
-            (second.UserDefinedMetadata ?? first.UserDefinedMetadata)!.Select(entry => (entry.Key, entry.Value)),
-            update.UserDefinedMetadata?.Select(entry => (entry.Key, entry.Value))
-        );
-        Assert.Equal(second.Refs ?? first.Refs, update.Refs);
-        Assert.Equal(second.Filename ?? first.Filename, update.Filename);
     }
 
     [Fact]
-    public async Task UpdateDataElementMetadata_WithNoValues_ChangesNothing()
+    public async Task ElementMetadata_OnAnAddedElement_KeepsTheValuesGivenToTheAdd()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
+        setup.DataMutator.AddBinaryDataElement(
+            "receipt",
+            "application/json",
+            "receipt.json",
+            "{}"u8.ToArray(),
+            metadata: [new KeyValueEntry { Key = "from-add", Value = "1" }]
+        );
 
-        setup.DataMutator.UpdateDataElementMetadata(setup.DataElement, new DataElementMetadataUpdate());
-        await setup.DataMutator.SaveChanges(setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false));
+        await SaveChanges(setup);
+
+        StorageInstanceMutationCreateDataElement create = Assert.Single(GetSingleMutation(setup).CreateDataElements);
+        Assert.Equal("receipt.json", create.Filename);
+        Assert.Equal([("from-add", "1")], create.Metadata?.Select(entry => (entry.Key, entry.Value)));
+        Assert.Null(create.Tags);
+    }
+
+    [Fact]
+    public async Task ElementMetadata_SetToEqualValues_SendsNothing()
+    {
+        await using var setup = await BinaryDataUnitOfWorkSetup.Create(
+            "initial"u8.ToArray(),
+            configureInstance: instance =>
+            {
+                instance.Data[0].Tags = ["signed"];
+                instance.Data[0].Metadata = [new KeyValueEntry { Key = "archive", Value = "yes" }];
+            }
+        );
+        DataElement dataElement = setup.DataMutator.GetDataElement(setup.DataElement);
+
+        dataElement.Tags = ["signed"];
+        dataElement.Metadata = [new KeyValueEntry { Key = "archive", Value = "yes" }];
+        dataElement.Filename = setup.DataElement.Filename;
+        await SaveChanges(setup);
 
         Assert.Empty(GetMutationRequests(setup));
     }
 
     [Fact]
-    public async Task UpdateDataElementMetadata_ForAnUnknownElement_Throws()
-    {
-        await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
-
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            setup.DataMutator.UpdateDataElementMetadata(
-                new DataElementIdentifier(Guid.NewGuid()),
-                new DataElementMetadataUpdate { Tags = ["signed"] }
-            )
-        );
-
-        Assert.Contains("not found on instance", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task UpdateDataElementMetadata_ForARemovedElement_Throws()
-    {
-        await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
-        setup.DataMutator.RemoveDataElement(setup.DataElement);
-
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            setup.DataMutator.UpdateDataElementMetadata(
-                setup.DataElement,
-                new DataElementMetadataUpdate { Tags = ["signed"] }
-            )
-        );
-
-        Assert.Contains("is marked for deletion", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task UpdateDataElementMetadata_WithARefToAnAddedElement_Throws()
+    public async Task ElementMetadata_WithARefToAnAddedElement_ThrowsOnSave()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
         BinaryDataChange added = setup.DataMutator.AddBinaryDataElement(
@@ -461,100 +363,146 @@ public sealed partial class InstanceDataUnitOfWorkTests
             "{}"u8.ToArray()
         );
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            setup.DataMutator.UpdateDataElementMetadata(
-                setup.DataElement,
-                new DataElementMetadataUpdate { Refs = [added.DataElementIdentifier.Guid] }
-            )
-        );
+        setup.DataMutator.GetDataElement(setup.DataElement).Refs = [added.DataElementIdentifier.Guid];
 
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SaveChanges(setup)
+        );
         Assert.Contains("its id is assigned when the instance is saved", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task RemoveDataElement_AfterUpdateDataElementMetadata_SendsOnlyTheDelete()
+    public async Task ElementMetadata_WithTheFilenameRemoved_ThrowsOnSave()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
-        setup.DataMutator.UpdateDataElementMetadata(
-            setup.DataElement,
-            new DataElementMetadataUpdate { Tags = ["signed"] }
+
+        setup.DataMutator.GetDataElement(setup.DataElement).Filename = null;
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SaveChanges(setup)
         );
+        Assert.Contains("Storage cannot remove a filename", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RemoveDataElement_AfterChangingItsMetadata_SendsOnlyTheDelete()
+    {
+        await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
+        setup.DataMutator.GetDataElement(setup.DataElement).Tags = ["signed"];
 
         setup.DataMutator.RemoveDataElement(setup.DataElement);
-        await setup.DataMutator.SaveChanges(setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false));
+        await SaveChanges(setup);
 
         StorageInstanceMutationRequest mutation = GetSingleMutation(setup);
         Assert.Empty(mutation.UpdateDataElements);
         Assert.Equal(Guid.Parse(setup.DataElement.Id), Assert.Single(mutation.DeleteDataElements).DataElementId);
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    public async Task SetDataValue_SetsAKeyOrRemovesItForNullOrEmpty_OnTheInstanceAndInTheSave(string? removingValue)
+    [Fact]
+    public async Task ChangingAnotherElementProperty_ThrowsOnSave()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
-        Instance instance = setup.DataMutator.Instance;
-        instance.DataValues = new() { ["removed"] = "old" };
 
-        setup.DataMutator.SetDataValue("added", "new");
-        setup.DataMutator.SetDataValue("removed", removingValue);
-        Dictionary<string, string?>? shownBeforeTheSave = instance.DataValues is { } shown ? new(shown) : null;
-        await setup.DataMutator.SaveChanges(setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false));
+        setup.DataMutator.GetDataElement(setup.DataElement).ContentType = "text/plain";
 
-        Assert.Equal(new Dictionary<string, string?> { ["added"] = "new" }, shownBeforeTheSave);
-        Assert.Equal(
-            new Dictionary<string, string?> { ["added"] = "new", ["removed"] = removingValue },
-            GetSingleMutation(setup).DataValues
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SaveChanges(setup)
         );
+        Assert.Contains(
+            $"DataElement {setup.DataElement.Id}.ContentType was changed",
+            exception.Message,
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task ChangingAnotherInstanceProperty_ThrowsOnSave()
+    {
+        await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
+
+        setup.DataMutator.Instance.DueBefore = DateTime.UtcNow.AddDays(1);
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SaveChanges(setup)
+        );
+        Assert.Contains("Instance.DueBefore was changed", exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    public async Task SetPresentationText_SetsAKeyOrRemovesItForNullOrEmpty_OnTheInstanceAndInTheSave(
-        string? removingValue
-    )
+    public async Task ChangedDataValues_AreSent_AndARemovedOrEmptyValueRemovesTheKey(string? removingValue)
     {
-        await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
-        Instance instance = setup.DataMutator.Instance;
-        instance.PresentationTexts = new() { ["removed"] = "old" };
+        await using var setup = await BinaryDataUnitOfWorkSetup.Create(
+            "initial"u8.ToArray(),
+            configureInstance: instance =>
+                instance.DataValues = new()
+                {
+                    ["removed"] = "old",
+                    ["emptied"] = "old",
+                    ["kept"] = "same",
+                }
+        );
+        Dictionary<string, string?> dataValues = setup.DataMutator.Instance.DataValues!;
 
-        setup.DataMutator.SetPresentationText("added", "new");
-        setup.DataMutator.SetPresentationText("removed", removingValue);
-        Dictionary<string, string?>? shownBeforeTheSave = instance.PresentationTexts is { } shown ? new(shown) : null;
-        await setup.DataMutator.SaveChanges(setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false));
+        dataValues["added"] = "new";
+        dataValues.Remove("removed");
+        dataValues["emptied"] = removingValue;
+        await SaveChanges(setup);
 
-        Assert.Equal(new Dictionary<string, string?> { ["added"] = "new" }, shownBeforeTheSave);
         Assert.Equal(
-            new Dictionary<string, string?> { ["added"] = "new", ["removed"] = removingValue },
+            new Dictionary<string, string?>
+            {
+                ["added"] = "new",
+                ["removed"] = null,
+                ["emptied"] = null,
+            },
+            GetSingleMutation(setup).DataValues
+        );
+    }
+
+    [Fact]
+    public async Task ChangedPresentationTexts_AreSent()
+    {
+        await using var setup = await BinaryDataUnitOfWorkSetup.Create(
+            "initial"u8.ToArray(),
+            configureInstance: instance => instance.PresentationTexts = new() { ["removed"] = "old" }
+        );
+
+        setup.DataMutator.Instance.PresentationTexts = new() { ["added"] = "new" };
+        await SaveChanges(setup);
+
+        Assert.Equal(
+            new Dictionary<string, string?> { ["added"] = "new", ["removed"] = null },
             GetSingleMutation(setup).PresentationTexts
         );
     }
 
     [Fact]
-    public async Task SetDataValue_ForAKeyInDataFields_Throws()
+    public async Task ChangingAKeyInDataFields_ThrowsOnSave()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
         setup.Services.AppMetadata.DataFields = [DerivedField()];
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            setup.DataMutator.SetDataValue("derived", "x")
-        );
+        setup.DataMutator.Instance.DataValues = new() { ["derived"] = "x" };
 
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SaveChanges(setup)
+        );
         Assert.Contains("derived from dataFields", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task SetPresentationText_ForAKeyInPresentationFields_Throws()
+    public async Task ChangingAKeyInPresentationFields_ThrowsOnSave()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
         setup.Services.AppMetadata.PresentationFields = [DerivedField()];
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            setup.DataMutator.SetPresentationText("derived", "x")
-        );
+        setup.DataMutator.Instance.PresentationTexts = new() { ["derived"] = "x" };
 
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SaveChanges(setup)
+        );
         Assert.Contains("derived from presentationFields", exception.Message, StringComparison.Ordinal);
     }
 
@@ -567,35 +515,56 @@ public sealed partial class InstanceDataUnitOfWorkTests
         };
 
     [Fact]
-    public async Task SaveChanges_CalledTwice_SendsStagedElementMetadataOnce()
+    public async Task SaveChanges_CalledTwice_SendsChangedElementMetadataOnce()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
-        setup.DataMutator.UpdateDataElementMetadata(
-            setup.DataElement,
-            new DataElementMetadataUpdate { Tags = ["signed"] }
-        );
+        setup.DataMutator.GetDataElement(setup.DataElement).Tags = ["signed"];
 
-        await SaveChangesTwice(setup);
+        await SaveChanges(setup);
+        await SaveChanges(setup);
 
         Assert.Single(GetMutationRequests(setup));
     }
 
     [Fact]
-    public async Task SaveChanges_CalledTwice_SendsAStagedPresentationTextOnce()
+    public async Task SaveChanges_CalledTwice_SendsAChangedPresentationTextOnce()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
-        setup.DataMutator.SetPresentationText("title", "Application");
+        setup.DataMutator.Instance.PresentationTexts = new() { ["title"] = "Application" };
 
-        await SaveChangesTwice(setup);
+        await SaveChanges(setup);
+        await SaveChanges(setup);
 
         Assert.Single(GetMutationRequests(setup));
     }
 
-    private static async Task SaveChangesTwice(BinaryDataUnitOfWorkSetup setup)
+    private static void SetAllMetadata(DataElement dataElement, Guid referencedId)
     {
-        await setup.DataMutator.SaveChanges(setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false));
-        await setup.DataMutator.SaveChanges(setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false));
+        dataElement.Tags = ["signed"];
+        dataElement.Metadata = [new KeyValueEntry { Key = "archive", Value = "yes" }];
+        dataElement.UserDefinedMetadata = [new KeyValueEntry { Key = "case", Value = "42" }];
+        dataElement.Refs = [referencedId];
+        dataElement.Filename = "renamed.json";
     }
+
+    private static void AssertAllMetadata(
+        List<string>? tags,
+        List<KeyValueEntry>? metadata,
+        List<KeyValueEntry>? userDefinedMetadata,
+        List<Guid>? refs,
+        string? filename,
+        Guid referencedId
+    )
+    {
+        Assert.Equal(["signed"], tags);
+        Assert.Equal([("archive", "yes")], metadata?.Select(entry => (entry.Key, entry.Value)));
+        Assert.Equal([("case", "42")], userDefinedMetadata?.Select(entry => (entry.Key, entry.Value)));
+        Assert.Equal([referencedId], refs);
+        Assert.Equal("renamed.json", filename);
+    }
+
+    private static Task SaveChanges(BinaryDataUnitOfWorkSetup setup) =>
+        setup.DataMutator.SaveChanges(setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false));
 
     private static RequestResponse[] GetMutationRequests(BinaryDataUnitOfWorkSetup setup) =>
         setup

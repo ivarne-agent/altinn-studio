@@ -560,7 +560,9 @@ public sealed partial class InstanceDataUnitOfWorkTests
             """{"status":"existing"}"""u8.ToArray(),
             new StorageVersionMetadata(InstanceVersion: 7, ProcessStateVersion: 3),
             seedStorageVersions: true,
-            blobVersionId: BlobVersion(1)
+            blobVersionId: BlobVersion(1),
+            configureInstance: instance =>
+                instance.DataValues = new Dictionary<string, string?> { [derivedFieldId] = cachedStatus }
         );
         DataElement formDataElement = AddPersistedPaymentForm(
             setup,
@@ -576,7 +578,6 @@ public sealed partial class InstanceDataUnitOfWorkTests
                 Path = nameof(PaymentForm.Status),
             },
         ];
-        setup.DataMutator.Instance.DataValues = new Dictionary<string, string?> { [derivedFieldId] = cachedStatus };
         setup.Services.Storage.GetInstanceAndData(setup.InstanceOwnerPartyId, setup.InstanceGuid).instance.DataValues =
         [];
         _ = await setup.DataMutator.GetFormData(formDataElement);
@@ -1087,7 +1088,12 @@ public sealed partial class InstanceDataUnitOfWorkTests
         await using var setup = await BinaryDataUnitOfWorkSetup.Create(
             initialBytes,
             new StorageVersionMetadata(ProcessStateVersion: 1),
-            blobVersionId: BlobVersion(1)
+            blobVersionId: BlobVersion(1),
+            configureInstance: instance =>
+            {
+                instance.DataValues = new Dictionary<string, string?> { ["paymentStatus"] = "created" };
+                instance.PresentationTexts = new Dictionary<string, string?> { ["customerName"] = "Old Name" };
+            }
         );
         DataType formDataType = setup.Services.AddDataType<PaymentForm>(
             "payment-form",
@@ -1113,17 +1119,10 @@ public sealed partial class InstanceDataUnitOfWorkTests
             },
         ];
 
-        setup.DataMutator.Instance.DataValues = new Dictionary<string, string?> { ["paymentStatus"] = "created" };
-        setup.DataMutator.Instance.PresentationTexts = new Dictionary<string, string?>
-        {
-            ["customerName"] = "Old Name",
-        };
         var (storageInstance, _) = setup.Services.Storage.GetInstanceAndData(
             setup.InstanceOwnerPartyId,
             setup.InstanceGuid
         );
-        storageInstance.DataValues = new Dictionary<string, string?> { ["paymentStatus"] = "created" };
-        storageInstance.PresentationTexts = new Dictionary<string, string?> { ["customerName"] = "Old Name" };
 
         Guid formDataGuid = Guid.NewGuid();
         var formDataElement = new DataElement
@@ -1216,25 +1215,27 @@ public sealed partial class InstanceDataUnitOfWorkTests
         byte[] initialBytes = Encoding.UTF8.GetBytes("""{"status":"created"}""");
         byte[] updatedBytes = Encoding.UTF8.GetBytes("""{"status":"workflow-updated"}""");
 
+        Guid referencedElement = Guid.NewGuid();
         await using var setup = await BinaryDataUnitOfWorkSetup.Create(
             initialBytes,
             new StorageVersionMetadata(InstanceVersion: 7, ProcessStateVersion: 3),
             seedStorageVersions: true,
-            blobVersionId: BlobVersion(1)
+            blobVersionId: BlobVersion(1),
+            configureInstance: instance =>
+            {
+                instance.Data[0].Refs = [referencedElement];
+                instance.Data[0].References =
+                [
+                    new Reference
+                    {
+                        Relation = RelationType.GeneratedFrom,
+                        ValueType = ReferenceType.Task,
+                        Value = "Task_1",
+                    },
+                ];
+            }
         );
         setup.DataMutator.Instance.Process!.Status = ProcessStatus.Processing;
-        DataElement element = setup.DataMutator.GetDataElement(setup.DataElement);
-        Guid referencedElement = Guid.NewGuid();
-        element.Refs = [referencedElement];
-        element.References =
-        [
-            new Reference
-            {
-                Relation = RelationType.GeneratedFrom,
-                ValueType = ReferenceType.Task,
-                Value = "Task_1",
-            },
-        ];
 
         // Read first, so the cache holds the old bytes the way a step that rewrites its input does.
         await setup.DataMutator.GetBinaryData(setup.DataElement);
@@ -1378,7 +1379,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
             seedStorageVersions: true,
             blobVersionId: BlobVersion(1)
         );
-        setup.DataMutator.SetDataValue("eFormidlingShipmentStatus", "levert");
+        (setup.DataMutator.Instance.DataValues ??= [])["eFormidlingShipmentStatus"] = "levert";
         setup.DataMutator.AddCompleteConfirmation();
 
         WorkflowAggregateSaveOutcome outcome = await setup.DataMutator.SaveWorkflowOwnedAggregate(
@@ -1845,7 +1846,12 @@ public sealed partial class InstanceDataUnitOfWorkTests
         await using var setup = await BinaryDataUnitOfWorkSetup.Create(
             initialBytes,
             new StorageVersionMetadata(InstanceVersion: 7, ProcessStateVersion: 3),
-            seedStorageVersions: true
+            seedStorageVersions: true,
+            configureInstance: instance =>
+            {
+                instance.DataValues = new Dictionary<string, string?> { ["paymentStatus"] = "created" };
+                instance.PresentationTexts = new Dictionary<string, string?> { ["customerName"] = "Old Name" };
+            }
         );
         DataType formDataType = setup.Services.AddDataType<PaymentForm>(
             "payment-form",
@@ -1871,17 +1877,10 @@ public sealed partial class InstanceDataUnitOfWorkTests
             },
         ];
 
-        setup.DataMutator.Instance.DataValues = new Dictionary<string, string?> { ["paymentStatus"] = "created" };
-        setup.DataMutator.Instance.PresentationTexts = new Dictionary<string, string?>
-        {
-            ["customerName"] = "Old Name",
-        };
         var (storageInstance, _) = setup.Services.Storage.GetInstanceAndData(
             setup.InstanceOwnerPartyId,
             setup.InstanceGuid
         );
-        storageInstance.DataValues = new Dictionary<string, string?> { ["paymentStatus"] = "created" };
-        storageInstance.PresentationTexts = new Dictionary<string, string?> { ["customerName"] = "Old Name" };
 
         Guid formDataGuid = Guid.NewGuid();
         var formDataElement = new DataElement
@@ -2352,7 +2351,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
             Encoding.UTF8.GetBytes("""{"status":"attempt-two"}""")
         );
         Guid stagedDataElementId = createdChange.DataElementIdentifier.Guid;
-        unitOfWork.SetDataValue("attempt", "two");
+        (unitOfWork.Instance.DataValues ??= [])["attempt"] = "two";
         DataElementChanges changes = unitOfWork.GetDataElementChanges(initializeAltinnRowId: false);
 
         await Assert.ThrowsAsync<InstanceMutationReplayedException>(() =>
@@ -2675,11 +2674,11 @@ public sealed partial class InstanceDataUnitOfWorkTests
         await using var setup = await BinaryDataUnitOfWorkSetup.Create(
             Encoding.UTF8.GetBytes("""{"status":"created"}"""),
             dataElementCount: 2,
-            locked: true
+            locked: true,
+            configureInstance: instance => instance.Data[1].Locked = false
         );
         DataElement alreadyLocked = setup.DataElements[0];
         DataElement unlocked = setup.DataElements[1];
-        setup.DataMutator.Instance.Data.Single(dataElement => dataElement.Id == unlocked.Id).Locked = false;
 
         setup.DataMutator.LockDataElementsForDataType("payment");
         await setup.DataMutator.SaveChanges(setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false));
@@ -2843,9 +2842,9 @@ public sealed partial class InstanceDataUnitOfWorkTests
     public async Task LockDataElementsForDataType_WhenCalledMultipleTimes_CommitsFinalValue()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create(
-            Encoding.UTF8.GetBytes("""{"status":"created"}""")
+            Encoding.UTF8.GetBytes("""{"status":"created"}"""),
+            configureInstance: instance => instance.Data[0].Locked = true
         );
-        setup.DataMutator.Instance.Data.Single(d => d.Id == setup.DataElement.Id).Locked = true;
 
         setup.DataMutator.LockDataElementsForDataType("payment");
         setup.DataMutator.UnlockDataElementsForDataType("payment");
@@ -3978,7 +3977,8 @@ public sealed partial class InstanceDataUnitOfWorkTests
             bool locked = false,
             string? blobVersionId = null,
             bool lastBlobVersionIdEmpty = false,
-            bool withoutBlobVersion = false
+            bool withoutBlobVersion = false,
+            Action<Instance>? configureInstance = null
         )
         {
             var services = new MockedServiceCollection();
@@ -4051,6 +4051,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
                 Data = [.. dataElements],
                 Process = new ProcessState { CurrentTask = new ProcessElementInfo { ElementId = taskId } },
             };
+            configureInstance?.Invoke(instance);
 
             services.Storage.AddInstance(instance);
             for (int i = 0; i < dataElements.Count; i++)
