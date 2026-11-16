@@ -2050,6 +2050,34 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
                 );
             }
         }
+
+        // The save took a new snapshot of the instance, so anything that differs from it now was changed by validators.
+        InstanceChanges instanceChanges;
+        try
+        {
+            instanceChanges = GetInstanceChanges();
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new InvalidOperationException("The instance has been changed by validators", exception);
+        }
+
+        if (instanceChanges.HasChanges)
+        {
+            throw new InvalidOperationException(
+                "The instance has been changed by validators: "
+                    + string.Join(
+                        ", ",
+                        [
+                            .. instanceChanges.DataValues.Keys.Select(key => $"data value '{key}'"),
+                            .. instanceChanges.PresentationTexts.Keys.Select(key => $"presentation text '{key}'"),
+                            .. instanceChanges.DataElementMetadata.Keys.Select(id =>
+                                $"metadata of data element {id.Id}"
+                            ),
+                        ]
+                    )
+            );
+        }
     }
 }
 

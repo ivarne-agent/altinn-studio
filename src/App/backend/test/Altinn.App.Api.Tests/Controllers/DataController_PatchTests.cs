@@ -1378,6 +1378,60 @@ public class DataControllerPatchTests : ApiTestBase
             .Contain("changed by validators");
     }
 
+    [Fact]
+    public async Task RunPatch_ChangeInstanceInValidator_Errors()
+    {
+        OverrideEnvironment = "Development";
+        OverrideServicesForThisTest = services =>
+        {
+            services.RemoveAll<IDataProcessor>();
+        };
+        _formDataValidatorMock.SetupGet(fdv => fdv.DataType).Returns("default");
+        _formDataValidatorMock
+            .Setup(fdv => fdv.HasRelevantChanges(It.IsAny<object>(), It.IsAny<object>()))
+            .Returns(true);
+        _formDataValidatorMock.SetupGet(fdv => fdv.NoIncrementalValidation).Returns(false);
+        _formDataValidatorMock
+            .Setup(v => v.ValidateFormData(It.IsAny<Instance>(), It.IsAny<DataElement>(), It.IsAny<object>(), "nb"))
+            .ReturnsAsync(
+                (Instance instance, DataElement dataElement, object data, string? language) =>
+                {
+                    (instance.DataValues ??= [])["validated"] = "true";
+                    return new List<ValidationIssue>();
+                }
+            )
+            .Verifiable(Times.Once);
+
+        var patch = new DataPatchRequestMultiple()
+        {
+            IgnoredValidators = [],
+            Patches =
+            [
+                new DataPatchRequestMultiple.PatchListItem(
+                    _dataGuid,
+                    JsonPatchOperation.ParseList(
+                        """
+                        [
+                            { "op": "add", "path": "/melding/name", "value": "Ola Nordmann" }
+                        ]
+                        """
+                    )
+                ),
+            ],
+        };
+
+        var url = $"/{Org}/{App}/instances/{_instanceId}/data?language=nb";
+
+        var action = async () =>
+        {
+            using var updateDataElementContent = JsonContent.Create(patch);
+            await GetClient().PatchAsync(url, updateDataElementContent);
+        };
+        (await action.Should().ThrowAsync<Exception>())
+            .Which.Message.Should()
+            .Contain("The instance has been changed by validators: data value 'validated'");
+    }
+
     private sealed class ConcurrentPatchDataWriteProcessor(ApiTestStorageMetadata storageMetadata) : IDataWriteProcessor
     {
         private readonly TaskCompletionSource _firstUnitOfWorkReady = new(

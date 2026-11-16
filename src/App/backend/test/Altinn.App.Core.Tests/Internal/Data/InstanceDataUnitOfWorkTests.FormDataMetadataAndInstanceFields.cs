@@ -538,6 +538,53 @@ public sealed partial class InstanceDataUnitOfWorkTests
         Assert.Single(GetMutationRequests(setup));
     }
 
+    [Fact]
+    public async Task VerifyDataElementsUnchangedSincePreviousChanges_AfterSavingInstanceChanges_DoesNotThrow()
+    {
+        await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
+        setup.DataMutator.Instance.DataValues = new() { ["status"] = "paid" };
+        setup.DataMutator.GetDataElement(setup.DataElement).Tags = ["signed"];
+        DataElementChanges changes = setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false);
+        await setup.DataMutator.SaveChanges(changes);
+
+        setup.DataMutator.VerifyDataElementsUnchangedSincePreviousChanges(changes);
+    }
+
+    [Fact]
+    public async Task VerifyDataElementsUnchangedSincePreviousChanges_WhenAValidatorChangesTheInstance_Throws()
+    {
+        await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
+        DataElementChanges changes = setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false);
+        await setup.DataMutator.SaveChanges(changes);
+
+        setup.DataMutator.Instance.PresentationTexts = new() { ["title"] = "Changed in a validator" };
+        setup.DataMutator.GetDataElement(setup.DataElement).Tags = ["validated"];
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+            setup.DataMutator.VerifyDataElementsUnchangedSincePreviousChanges(changes)
+        );
+        Assert.Equal(
+            $"The instance has been changed by validators: presentation text 'title', metadata of data element {setup.DataElement.Id}",
+            exception.Message
+        );
+    }
+
+    [Fact]
+    public async Task VerifyDataElementsUnchangedSincePreviousChanges_WhenAValidatorChangesAnotherInstanceProperty_Throws()
+    {
+        await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
+        DataElementChanges changes = setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false);
+        await setup.DataMutator.SaveChanges(changes);
+
+        setup.DataMutator.Instance.DueBefore = DateTime.UtcNow.AddDays(1);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+            setup.DataMutator.VerifyDataElementsUnchangedSincePreviousChanges(changes)
+        );
+        Assert.Equal("The instance has been changed by validators", exception.Message);
+        Assert.Contains("Instance.DueBefore was changed", exception.InnerException?.Message, StringComparison.Ordinal);
+    }
+
     private static void SetAllMetadata(DataElement dataElement, Guid referencedId)
     {
         dataElement.Tags = ["signed"];
