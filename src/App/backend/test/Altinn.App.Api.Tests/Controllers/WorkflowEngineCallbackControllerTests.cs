@@ -1201,8 +1201,30 @@ public class WorkflowEngineCallbackControllerTests
             (mutator, _) => Assert.IsType<InstanceDataUnitOfWork>(mutator).AddCompleteConfirmation()
         );
 
-    private static async Task AssertDeferralAfterStagingReturnsNonRetryableProblem(
+    [Fact]
+    public Task ExecuteCommand_ServiceTaskDefersAfterAnUnsavableInstanceChange_ReturnsNonRetryableProblem() =>
+        AssertServiceTaskReturnsNonRetryableProblem(
+            (mutator, _) => mutator.Instance.DueBefore = DateTime.UtcNow.AddDays(1),
+            defer: true,
+            "Instance Change Not Savable"
+        );
+
+    [Fact]
+    public Task ExecuteCommand_ServiceTaskSucceedsAfterAnUnsavableInstanceChange_ReturnsNonRetryableProblem() =>
+        AssertServiceTaskReturnsNonRetryableProblem(
+            (mutator, _) => mutator.Instance.DueBefore = DateTime.UtcNow.AddDays(1),
+            defer: false,
+            "Instance Change Not Savable"
+        );
+
+    private static Task AssertDeferralAfterStagingReturnsNonRetryableProblem(
         Action<IInstanceDataMutator, DataElement> stageChange
+    ) => AssertServiceTaskReturnsNonRetryableProblem(stageChange, defer: true, "Deferral With Data Changes");
+
+    private static async Task AssertServiceTaskReturnsNonRetryableProblem(
+        Action<IInstanceDataMutator, DataElement> stageChange,
+        bool defer,
+        string expectedTitle
     )
     {
         var dataElement = new DataElement
@@ -1214,7 +1236,7 @@ public class WorkflowEngineCallbackControllerTests
         await using ControllerSetup setup = CreateSetup(
             services =>
             {
-                services.Services.AddSingleton<IServiceTask>(new DeferringServiceTask(stageChange, dataElement));
+                services.Services.AddSingleton<IServiceTask>(new ChangingServiceTask(stageChange, dataElement, defer));
                 services.Services.AddSingleton<IWorkflowEngineCommand>(serviceProvider => new ExecuteServiceTask(
                     serviceProvider.GetRequiredService<AppImplementationFactory>(),
                     new MailboxDeliveryEnvelope(serviceProvider.GetRequiredService<WorkflowStateSigner>())
@@ -1228,19 +1250,21 @@ public class WorkflowEngineCallbackControllerTests
                 instance.Process.CurrentTask = new ProcessElementInfo
                 {
                     ElementId = "ServiceTask_1",
-                    AltinnTaskType = DeferringServiceTask.ServiceTaskType,
+                    AltinnTaskType = ChangingServiceTask.ServiceTaskType,
                 };
             }
         );
         string payload = CommandPayloadSerializer.Serialize(
-            new ExecuteServiceTaskPayload(DeferringServiceTask.ServiceTaskType, ItemIndex: 0)
+            new ExecuteServiceTaskPayload(ChangingServiceTask.ServiceTaskType, ItemIndex: 0)
         )!;
 
         IActionResult result = await setup.Execute(ExecuteServiceTask.Key, Guid.NewGuid(), payload);
 
         var objectResult = Assert.IsType<ObjectResult>(result);
         Assert.Equal(StatusCodes.Status422UnprocessableEntity, objectResult.StatusCode);
-        Assert.Equal("Deferral With Data Changes", Assert.IsType<ProblemDetails>(objectResult.Value).Title);
+        var problem = Assert.IsType<ProblemDetails>(objectResult.Value);
+        Assert.Equal(expectedTitle, problem.Title);
+        Assert.Equal(true, problem.Extensions["nonRetryable"]);
         Assert.Empty(GetMutationRequests(setup.Services));
     }
 
@@ -1456,12 +1480,13 @@ public class WorkflowEngineCallbackControllerTests
         }
     }
 
-    private sealed class DeferringServiceTask(
+    private sealed class ChangingServiceTask(
         Action<IInstanceDataMutator, DataElement> stageChange,
-        DataElement dataElement
+        DataElement dataElement,
+        bool defer
     ) : IServiceTask
     {
-        public const string ServiceTaskType = "DeferAfterStagingForCallbackTest";
+        public const string ServiceTaskType = "ChangeThenConcludeForCallbackTest";
 
         public string Type => ServiceTaskType;
 
@@ -1470,7 +1495,9 @@ public class WorkflowEngineCallbackControllerTests
         public Task<ServiceTaskResult> Execute(StageContext context)
         {
             stageChange(context.InstanceDataMutator, dataElement);
-            return Task.FromResult<ServiceTaskResult>(ServiceTaskResult.Defer(TimeSpan.FromMinutes(1)));
+            return Task.FromResult<ServiceTaskResult>(
+                defer ? ServiceTaskResult.Defer(TimeSpan.FromMinutes(1)) : ServiceTaskResult.Success()
+            );
         }
     }
 

@@ -365,7 +365,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
 
         setup.DataMutator.GetDataElement(setup.DataElement).Refs = [added.DataElementIdentifier.Guid];
 
-        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        InstanceChangeNotSavableException exception = await Assert.ThrowsAsync<InstanceChangeNotSavableException>(() =>
             SaveChanges(setup)
         );
         Assert.Contains("its id is assigned when the instance is saved", exception.Message, StringComparison.Ordinal);
@@ -378,7 +378,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
 
         setup.DataMutator.GetDataElement(setup.DataElement).Filename = null;
 
-        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        InstanceChangeNotSavableException exception = await Assert.ThrowsAsync<InstanceChangeNotSavableException>(() =>
             SaveChanges(setup)
         );
         Assert.Contains("Storage cannot remove a filename", exception.Message, StringComparison.Ordinal);
@@ -405,7 +405,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
 
         setup.DataMutator.GetDataElement(setup.DataElement).ContentType = "text/plain";
 
-        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        InstanceChangeNotSavableException exception = await Assert.ThrowsAsync<InstanceChangeNotSavableException>(() =>
             SaveChanges(setup)
         );
         Assert.Contains(
@@ -422,7 +422,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
 
         setup.DataMutator.Instance.DueBefore = DateTime.UtcNow.AddDays(1);
 
-        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        InstanceChangeNotSavableException exception = await Assert.ThrowsAsync<InstanceChangeNotSavableException>(() =>
             SaveChanges(setup)
         );
         Assert.Contains("Instance.DueBefore was changed", exception.Message, StringComparison.Ordinal);
@@ -486,7 +486,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
 
         setup.DataMutator.Instance.DataValues = new() { ["derived"] = "x" };
 
-        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        InstanceChangeNotSavableException exception = await Assert.ThrowsAsync<InstanceChangeNotSavableException>(() =>
             SaveChanges(setup)
         );
         Assert.Contains("derived from dataFields", exception.Message, StringComparison.Ordinal);
@@ -500,7 +500,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
 
         setup.DataMutator.Instance.PresentationTexts = new() { ["derived"] = "x" };
 
-        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        InstanceChangeNotSavableException exception = await Assert.ThrowsAsync<InstanceChangeNotSavableException>(() =>
             SaveChanges(setup)
         );
         Assert.Contains("derived from presentationFields", exception.Message, StringComparison.Ordinal);

@@ -64,7 +64,8 @@ and returns the re-signed state.
 - A save compares the mutator's `Instance` with the instance Storage last returned, and sends the changed data values,
   presentation texts and element tags, metadata, user-defined metadata, refs and filenames. A change to anything else
   on the instance fails the save rather than being dropped. So does a change to a key derived from
-  `dataFields`/`presentationFields`, because every save derives those again from the cached forms.
+  `dataFields`/`presentationFields`, because every save derives those again from the cached forms. In a callback
+  such a change fails the step with a non-retryable 422, since a retry would make it again.
 - A deferral saves nothing and returns the incoming state, so the next attempt starts where this one did. A deferring
   step that staged any change, such as a data value or element metadata, fails with a 422.
 

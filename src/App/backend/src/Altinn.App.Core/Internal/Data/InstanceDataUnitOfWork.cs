@@ -755,7 +755,7 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
         {
             if (derivedFields?.Exists(field => field.Id == key) is true)
             {
-                throw new InvalidOperationException(
+                throw new InstanceChangeNotSavableException(
                     $"{description} '{key}' was changed in Instance.{instanceProperty}, but it is derived from {metadataProperty} in applicationmetadata.json, and the save would overwrite it; remove it from {metadataProperty} or set the model field it is derived from."
                 );
             }
@@ -775,7 +775,7 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
                     .SequenceEqual(JsonSerializer.SerializeToUtf8Bytes(property.GetValue(current)))
             )
             {
-                throw new InvalidOperationException(
+                throw new InstanceChangeNotSavableException(
                     $"{owner}.{property.Name} was changed, but a save only sends changes to the instance's DataValues and PresentationTexts and to the Tags, Metadata, UserDefinedMetadata, Refs and Filename of its data elements."
                 );
             }
@@ -786,7 +786,7 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
     {
         if (current.Filename is null && previous.Filename is not null)
         {
-            throw new InvalidOperationException(
+            throw new InstanceChangeNotSavableException(
                 $"DataElement {current.Id}.Filename was set to null, but Storage cannot remove a filename."
             );
         }
@@ -828,7 +828,7 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
         {
             if (GetUnsavedCreation(new DataElementIdentifier(reference)) is not null)
             {
-                throw new InvalidOperationException(
+                throw new InstanceChangeNotSavableException(
                     $"Data element {reference} is added in this unit of work and cannot be referred to: its id is assigned when the instance is saved"
                 );
             }
@@ -2041,7 +2041,7 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
         {
             (instanceChanges, dataElementMetadataChanges) = GetInstanceChanges();
         }
-        catch (InvalidOperationException exception)
+        catch (InstanceChangeNotSavableException exception)
         {
             throw new InvalidOperationException("The instance has been changed by validators", exception);
         }

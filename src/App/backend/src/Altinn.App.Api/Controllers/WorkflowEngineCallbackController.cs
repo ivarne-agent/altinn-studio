@@ -221,6 +221,10 @@ public class WorkflowEngineCallbackController : ControllerBase
                         currentTaskId
                     );
                 }
+                catch (InstanceChangeNotSavableException ex)
+                {
+                    return InstanceChangeNotSavableProblem(ex, command.GetKey(), instanceId, currentTaskId, activity);
+                }
                 catch (InstanceDataStaleException ex)
                 {
                     _logger.LogError(
@@ -289,7 +293,17 @@ public class WorkflowEngineCallbackController : ControllerBase
 
             case DeferredWorkflowEngineCommandResult deferred:
                 // Deferrals echo the incoming state, so staged writes would be lost.
-                if (instanceDataUnitOfWork.HasStagedChanges())
+                bool hasStagedChanges;
+                try
+                {
+                    hasStagedChanges = instanceDataUnitOfWork.HasStagedChanges();
+                }
+                catch (InstanceChangeNotSavableException ex)
+                {
+                    return InstanceChangeNotSavableProblem(ex, command.GetKey(), instanceId, currentTaskId, activity);
+                }
+
+                if (hasStagedChanges)
                 {
                     _logger.LogError(
                         "Callback handler deferred after modifying instance data. "
@@ -528,6 +542,30 @@ public class WorkflowEngineCallbackController : ControllerBase
                 AutoAdvanceAction = autoAdvanceAction,
             },
             cancellationToken
+        );
+    }
+
+    // A retry runs the same code and makes the same change, so the failure is reported as non-retryable.
+    private ObjectResult InstanceChangeNotSavableProblem(
+        InstanceChangeNotSavableException exception,
+        string commandKey,
+        InstanceIdentifier instanceId,
+        string? taskId,
+        Activity? activity
+    )
+    {
+        _logger.LogError(
+            exception,
+            "Callback handler changed the instance in a way that cannot be saved. CommandKey: {CommandKey}, Instance: {InstanceId}, Task: {TaskId}.",
+            commandKey,
+            instanceId,
+            taskId
+        );
+        activity?.SetStatus(ActivityStatusCode.Error, "Instance change cannot be saved");
+        return NonRetryableProblem(
+            "Instance Change Not Savable",
+            exception.Message,
+            StatusCodes.Status422UnprocessableEntity
         );
     }
 
