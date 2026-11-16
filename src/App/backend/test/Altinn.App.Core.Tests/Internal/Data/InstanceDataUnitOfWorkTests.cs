@@ -671,7 +671,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
         DataElementChanges savedChanges = setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false);
         await setup.DataMutator.SaveChanges(savedChanges);
 
-        setup.DataMutator.VerifyDataElementsUnchangedSincePreviousChanges(savedChanges);
+        setup.DataMutator.VerifyUnchangedSincePreviousChanges(savedChanges);
         ReadOnlyMemory<byte> binaryAfterSave = await setup.DataMutator.GetBinaryData(formDataElement);
         var formAfterSave = Assert.IsType<PaymentForm>(await setup.DataMutator.GetFormData(formDataElement));
         FormDataChange changeAfterSave = Assert.Single(
@@ -2980,7 +2980,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
     }
 
     [Fact]
-    public async Task VerifyDataElementsUnchangedSincePreviousChanges_AfterSavingUpdatedBinaryData_DoesNotThrow()
+    public async Task VerifyUnchangedSincePreviousChanges_AfterSavingUpdatedBinaryData_DoesNotThrow()
     {
         byte[] initialBytes = Encoding.UTF8.GetBytes("""{"status":"created"}""");
         byte[] updatedBytes = Encoding.UTF8.GetBytes("""{"status":"paid"}""");
@@ -2991,7 +2991,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
         DataElementChanges changes = setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false);
         await setup.DataMutator.SaveChanges(changes);
 
-        setup.DataMutator.VerifyDataElementsUnchangedSincePreviousChanges(changes);
+        setup.DataMutator.VerifyUnchangedSincePreviousChanges(changes);
     }
 
     [Fact]

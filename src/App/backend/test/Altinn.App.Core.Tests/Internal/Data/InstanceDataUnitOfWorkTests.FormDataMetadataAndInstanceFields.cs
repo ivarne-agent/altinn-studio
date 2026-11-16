@@ -539,7 +539,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
     }
 
     [Fact]
-    public async Task VerifyDataElementsUnchangedSincePreviousChanges_AfterSavingInstanceChanges_DoesNotThrow()
+    public async Task VerifyUnchangedSincePreviousChanges_AfterSavingInstanceChanges_DoesNotThrow()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
         setup.DataMutator.Instance.DataValues = new() { ["status"] = "paid" };
@@ -547,11 +547,11 @@ public sealed partial class InstanceDataUnitOfWorkTests
         DataElementChanges changes = setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false);
         await setup.DataMutator.SaveChanges(changes);
 
-        setup.DataMutator.VerifyDataElementsUnchangedSincePreviousChanges(changes);
+        setup.DataMutator.VerifyUnchangedSincePreviousChanges(changes);
     }
 
     [Fact]
-    public async Task VerifyDataElementsUnchangedSincePreviousChanges_WhenAValidatorChangesTheInstance_Throws()
+    public async Task VerifyUnchangedSincePreviousChanges_WhenAValidatorChangesTheInstance_Throws()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
         DataElementChanges changes = setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false);
@@ -561,7 +561,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
         setup.DataMutator.GetDataElement(setup.DataElement).Tags = ["validated"];
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            setup.DataMutator.VerifyDataElementsUnchangedSincePreviousChanges(changes)
+            setup.DataMutator.VerifyUnchangedSincePreviousChanges(changes)
         );
         Assert.Equal(
             $"The instance has been changed by validators: presentation text 'title', metadata of data element {setup.DataElement.Id}",
@@ -570,7 +570,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
     }
 
     [Fact]
-    public async Task VerifyDataElementsUnchangedSincePreviousChanges_WhenAValidatorChangesAnotherInstanceProperty_Throws()
+    public async Task VerifyUnchangedSincePreviousChanges_WhenAValidatorChangesAnotherInstanceProperty_Throws()
     {
         await using var setup = await BinaryDataUnitOfWorkSetup.Create("initial"u8.ToArray());
         DataElementChanges changes = setup.DataMutator.GetDataElementChanges(initializeAltinnRowId: false);
@@ -579,7 +579,7 @@ public sealed partial class InstanceDataUnitOfWorkTests
         setup.DataMutator.Instance.DueBefore = DateTime.UtcNow.AddDays(1);
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            setup.DataMutator.VerifyDataElementsUnchangedSincePreviousChanges(changes)
+            setup.DataMutator.VerifyUnchangedSincePreviousChanges(changes)
         );
         Assert.Equal("The instance has been changed by validators", exception.Message);
         Assert.Contains("Instance.DueBefore was changed", exception.InnerException?.Message, StringComparison.Ordinal);

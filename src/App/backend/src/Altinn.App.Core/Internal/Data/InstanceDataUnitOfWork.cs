@@ -2017,9 +2017,9 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
     private StorageAuthenticationMethod GetAuthenticationMethod(DataType dataType) =>
         _authenticationMethodOverrides.GetValueOrDefault(dataType, _defaultAuthenticationMethod);
 
-    internal void VerifyDataElementsUnchangedSincePreviousChanges(DataElementChanges previousChanges)
+    internal void VerifyUnchangedSincePreviousChanges(DataElementChanges previousChanges)
     {
-        using var activity = _telemetry?.StartVerifyDataElementsUnchangedSincePreviousChanges();
+        using var activity = _telemetry?.StartVerifyUnchangedSincePreviousChanges();
         var changes = GetDataElementChanges(initializeAltinnRowId: false);
         if (changes.AllChanges.Count != previousChanges.AllChanges.Count)
         {

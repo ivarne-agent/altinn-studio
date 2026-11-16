@@ -192,7 +192,7 @@ internal class InternalPatchService
         if (_hostingEnvironment.IsDevelopment())
         {
             // Ensure that validation did not change the data elements
-            dataAccessor.VerifyDataElementsUnchangedSincePreviousChanges(changes);
+            dataAccessor.VerifyUnchangedSincePreviousChanges(changes);
         }
 
         var formDataChanges = changes.FormDataChanges.ToList();
