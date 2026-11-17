@@ -61,10 +61,36 @@ public class StorageClientInterceptor : HttpMessageHandler
     }
 
     public ConcurrentBag<RequestResponse> RequestsResponses { get; } = new();
+
+    /// <summary>The events PUT to <c>process/instanceandevents</c>, in the order they arrived.</summary>
+    public ConcurrentQueue<InstanceEvent> InstanceEvents { get; } = new();
+
     public ApplicationMetadata AppMetadata { get; }
     public bool StampDataElementBlobVersionIds { get; }
     public bool EnforceExpectedProcessStatus { get; set; }
     public string? ForcedMutationConflictMessage { get; set; }
+
+    /// <summary>
+    /// Forgets every instance, data element, version and recorded request, so that a host shared by several
+    /// tests gives each of them an empty storage. The configuration flags are kept.
+    /// </summary>
+    public void Clear()
+    {
+        _instances.Clear();
+        _data.Clear();
+        _dataBlobVersions.Clear();
+        _dataContentVersions.Clear();
+        _instanceVersions.Clear();
+        _processStateVersions.Clear();
+        _mutationReplayRecords.Clear();
+        RequestsResponses.Clear();
+        InstanceEvents.Clear();
+        ForcedMutationConflictMessage = null;
+    }
+
+    /// <summary>The stored instance, or <c>null</c> when storage holds none with that id (a hard delete removes it).</summary>
+    public Instance? FindInstance(int instanceOwnerPartyId, Guid instanceGuid) =>
+        _instances.TryGetValue($"{instanceOwnerPartyId}/{instanceGuid}", out Instance? instance) ? instance : null;
 
     public void AddInstance(Instance instance)
     {
@@ -195,8 +221,46 @@ public class StorageClientInterceptor : HttpMessageHandler
 
         var response = (request.Method.Method, request.RequestUri?.AbsolutePath.Trim('/').Split('/')) switch
         {
+            ("POST", ["storage", "api", "v1", "instances"]) => PostInstance(requestBody, request),
+            ("GET", ["storage", "api", "v1", "instances"]) => QueryInstances(request),
             ("GET", { } path) when TryParseInstanceUrl(path, out int partyId, out Guid instanceGuid) =>
                 GetInstanceResponse(partyId, instanceGuid),
+            ("DELETE", { } path) when TryParseInstanceUrl(path, out int partyId, out Guid instanceGuid) =>
+                DeleteInstance(partyId, instanceGuid, request),
+            ("PUT", { } path) when TryParseInstanceSubUrl(path, ["process"], out int partyId, out Guid instanceGuid) =>
+                PutProcess(partyId, instanceGuid, requestBody, request, withEvents: false),
+            ("PUT", { } path)
+                when TryParseInstanceSubUrl(
+                    path,
+                    ["process", "instanceandevents"],
+                    out int partyId,
+                    out Guid instanceGuid
+                ) => PutProcess(partyId, instanceGuid, requestBody, request, withEvents: true),
+            ("POST", { } path)
+                when TryParseInstanceSubUrl(path, ["complete"], out int partyId, out Guid instanceGuid) => PostComplete(
+                partyId,
+                instanceGuid,
+                request
+            ),
+            ("PUT", { } path)
+                when TryParseInstanceSubUrl(path, ["readstatus"], out int partyId, out Guid instanceGuid) =>
+                PutReadStatus(partyId, instanceGuid, request),
+            ("PUT", { } path)
+                when TryParseInstanceSubUrl(path, ["substatus"], out int partyId, out Guid instanceGuid) =>
+                PutSubstatus(partyId, instanceGuid, requestBody, request),
+            ("GET", { } path)
+                when TryParseInstanceSubUrl(path, ["dataelements"], out int partyId, out Guid instanceGuid) =>
+                GetDataElements(partyId, instanceGuid),
+            ("PUT", { } path) when TryParseDataLockUrl(path, out int partyId, out Guid instanceGuid, out Guid dataId) =>
+                SetDataLock(partyId, instanceGuid, dataId, request, locked: true),
+            ("DELETE", { } path)
+                when TryParseDataLockUrl(path, out int partyId, out Guid instanceGuid, out Guid dataId) => SetDataLock(
+                partyId,
+                instanceGuid,
+                dataId,
+                request,
+                locked: false
+            ),
             ("GET", { } path) when TryParseDataUrl(path, out int partyId, out Guid instanceGuid, out Guid dataId) =>
                 GetData(partyId, instanceGuid, dataId, request),
             ("POST", { } path) when TryParseDataPostUrl(path, out int partyId, out Guid instanceGuid) => PostData(
@@ -492,11 +556,11 @@ public class StorageClientInterceptor : HttpMessageHandler
         }
 
         var contentType = request.Content?.Headers.ContentType?.MediaType;
-        if (contentType is null || !dataType.AllowedContentTypes.Contains(contentType))
+        if (contentType is null || !AllowsContentType(dataType, contentType))
         {
             return CreateErrorResponse(
                 HttpStatusCode.BadRequest,
-                $"Data type {dataTypeString} does not allow content type {contentType}, allowed types are: {string.Join(", ", dataType.AllowedContentTypes)}"
+                $"Data type {dataTypeString} does not allow content type {contentType}, allowed types are: {string.Join(", ", dataType.AllowedContentTypes ?? [])}"
             );
         }
 
@@ -881,7 +945,7 @@ public class StorageClientInterceptor : HttpMessageHandler
             }
 
             string contentType = create.ContentType ?? contentPart.ContentType;
-            if (!dataType.AllowedContentTypes.Contains(contentType))
+            if (!AllowsContentType(dataType, contentType))
             {
                 return CreateErrorResponse(
                     HttpStatusCode.BadRequest,
@@ -1160,6 +1224,483 @@ public class StorageClientInterceptor : HttpMessageHandler
         int ProducedProcessStateVersion,
         string ResponseBody
     );
+
+    /// <summary>A data type that lists no allowed content types accepts any, as Storage does.</summary>
+    private static bool AllowsContentType(DataType dataType, string contentType) =>
+        dataType.AllowedContentTypes is not { Count: > 0 } allowed || allowed.Contains(contentType);
+
+    private static bool TryParseInstanceSubUrl(
+        string[] pathSegments,
+        string[] subPath,
+        out int instanceOwnerPartyId,
+        out Guid instanceGuid
+    )
+    {
+        if (
+            pathSegments is ["storage", "api", "v1", "instances", var partyIdStr, var instanceGuidStr, .. var rest]
+            && rest.SequenceEqual(subPath, StringComparer.OrdinalIgnoreCase)
+            && int.TryParse(partyIdStr, out instanceOwnerPartyId)
+            && Guid.TryParse(instanceGuidStr, out instanceGuid)
+        )
+        {
+            return true;
+        }
+
+        instanceOwnerPartyId = 0;
+        instanceGuid = Guid.Empty;
+        return false;
+    }
+
+    private static bool TryParseDataLockUrl(
+        string[] pathSegments,
+        out int instanceOwnerPartyId,
+        out Guid instanceGuid,
+        out Guid dataId
+    )
+    {
+        if (
+            pathSegments
+                is [
+                    "storage",
+                    "api",
+                    "v1",
+                    "instances",
+                    var partyIdStr,
+                    var instanceGuidStr,
+                    "data",
+                    var dataIdStr,
+                    "lock",
+                ]
+            && int.TryParse(partyIdStr, out instanceOwnerPartyId)
+            && Guid.TryParse(instanceGuidStr, out instanceGuid)
+            && Guid.TryParse(dataIdStr, out dataId)
+        )
+        {
+            return true;
+        }
+
+        instanceOwnerPartyId = 0;
+        instanceGuid = Guid.Empty;
+        dataId = Guid.Empty;
+        return false;
+    }
+
+    /// <summary>
+    /// <c>POST instances?appId=</c>: stores the template under a new id, as Storage does. The owner, process
+    /// state, status and data values of the template are kept; data elements are not, they are posted separately.
+    /// </summary>
+    private HttpResponseMessage PostInstance(byte[]? requestBody, HttpRequestMessage request)
+    {
+        if (requestBody is null)
+        {
+            return CreateErrorResponse(HttpStatusCode.BadRequest, "No instance template provided");
+        }
+
+        var query = HttpUtility.ParseQueryString(request.RequestUri?.Query ?? string.Empty);
+        string? appId = query["appId"];
+        if (string.IsNullOrWhiteSpace(appId) || appId.Split('/') is not [var org, _])
+        {
+            return CreateErrorResponse(HttpStatusCode.BadRequest, "appId query parameter must be {org}/{app}");
+        }
+
+        Instance? template = JsonConvert.DeserializeObject<Instance>(Encoding.UTF8.GetString(requestBody));
+        if (template?.InstanceOwner?.PartyId is not { } partyIdStr || !int.TryParse(partyIdStr, out int partyId))
+        {
+            return CreateErrorResponse(HttpStatusCode.BadRequest, "Instance template needs instanceOwner.partyId");
+        }
+
+        DateTime now = DateTime.UtcNow;
+        Guid instanceGuid = Guid.NewGuid();
+        template.Id = $"{partyId}/{instanceGuid}";
+        template.AppId = appId;
+        template.Org = org;
+        template.Data = [];
+        template.Status ??= new InstanceStatus();
+        template.Created = now;
+        template.CreatedBy = "storage-interceptor";
+        template.LastChanged = now;
+        template.LastChangedBy = "storage-interceptor";
+        _instances[template.Id.ToLowerInvariant()] = template;
+        _instanceVersions[template.Id] = 1;
+        _processStateVersions[template.Id] = 1;
+
+        return CreateInstanceResponse(template, partyId, instanceGuid, HttpStatusCode.Created);
+    }
+
+    /// <summary>
+    /// <c>GET instances?...</c>: the stored instances that match every query parameter. The parameters the app's
+    /// clients use are supported; any other is an error rather than silently ignored.
+    /// </summary>
+    private HttpResponseMessage QueryInstances(HttpRequestMessage request)
+    {
+        var query = HttpUtility.ParseQueryString(request.RequestUri?.Query ?? string.Empty);
+        IEnumerable<Instance> matching = _instances.Values;
+        foreach (string? key in query.AllKeys)
+        {
+            string? value = key is null ? null : query[key];
+            if (key is null || value is null)
+            {
+                continue;
+            }
+
+            matching = key switch
+            {
+                "appId" => matching.Where(i => string.Equals(i.AppId, value, StringComparison.OrdinalIgnoreCase)),
+                "org" => matching.Where(i => string.Equals(i.Org, value, StringComparison.OrdinalIgnoreCase)),
+                "instanceOwner.partyId" => matching.Where(i => i.InstanceOwner?.PartyId == value),
+                "status.isArchived" => matching.Where(i => (i.Status?.IsArchived ?? false) == ParseBool(value)),
+                "status.isSoftDeleted" => matching.Where(i => (i.Status?.IsSoftDeleted ?? false) == ParseBool(value)),
+                "status.isHardDeleted" => matching.Where(i => (i.Status?.IsHardDeleted ?? false) == ParseBool(value)),
+                "process.isComplete" => matching.Where(i => (i.Process?.Ended is not null) == ParseBool(value)),
+                "process.currentTask" => matching.Where(i => i.Process?.CurrentTask?.ElementId == value),
+                "size" or "continuationToken" => matching,
+                _ => throw new Exception(
+                    $"Query parameter {key} is not supported by {nameof(StorageClientInterceptor)}; add it to {nameof(QueryInstances)}"
+                ),
+            };
+        }
+
+        List<Instance> instances = matching.OrderBy(i => i.Created).ToList();
+        foreach (Instance instance in instances)
+        {
+            StampBlobVersionIds(instance);
+        }
+        var queryResponse = new QueryResponse<Instance>
+        {
+            Count = instances.Count,
+            Self = request.RequestUri?.ToString() ?? string.Empty,
+            Instances = instances,
+        };
+        return new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(JsonConvert.SerializeObject(queryResponse), Encoding.UTF8, "application/json"),
+        };
+
+        static bool ParseBool(string value) => bool.Parse(value);
+    }
+
+    /// <summary>
+    /// <c>DELETE instances/{party}/{guid}?hard=</c>: a soft delete flags the instance and keeps it; a hard delete
+    /// flags it in the response and removes it, so that later reads get 404, as a user of Storage sees it.
+    /// </summary>
+    private HttpResponseMessage DeleteInstance(int instanceOwnerPartyId, Guid instanceGuid, HttpRequestMessage request)
+    {
+        string instanceId = $"{instanceOwnerPartyId}/{instanceGuid}";
+        if (!_instances.TryGetValue(instanceId, out Instance? instance))
+        {
+            return CreateErrorResponse(HttpStatusCode.NotFound, $"Instance with id {instanceId} not found");
+        }
+
+        var query = HttpUtility.ParseQueryString(request.RequestUri?.Query ?? string.Empty);
+        bool hard = bool.TryParse(query["hard"], out bool parsedHard) && parsedHard;
+        DateTime now = DateTime.UtcNow;
+        instance.Status ??= new InstanceStatus();
+        instance.Status.IsSoftDeleted = true;
+        instance.Status.SoftDeleted ??= now;
+        if (hard)
+        {
+            instance.Status.IsHardDeleted = true;
+            instance.Status.HardDeleted = now;
+        }
+        instance.LastChanged = now;
+        instance.LastChangedBy = "storage-interceptor";
+
+        HttpResponseMessage response = CreateInstanceResponse(instance, instanceOwnerPartyId, instanceGuid);
+        if (hard)
+        {
+            _instances.TryRemove(instanceId, out _);
+            foreach (DataElement dataElement in instance.Data ?? [])
+            {
+                if (Guid.TryParse(dataElement.Id, out Guid dataId))
+                {
+                    _data.TryRemove(dataId, out _);
+                    _dataBlobVersions.TryRemove(dataId, out _);
+                    _dataContentVersions.TryRemove(dataId, out _);
+                }
+            }
+            _instanceVersions.TryRemove(instanceId, out _);
+            _processStateVersions.TryRemove(instanceId, out _);
+        }
+        return response;
+    }
+
+    /// <summary>
+    /// <c>PUT instances/{party}/{guid}/process</c> and <c>.../process/instanceandevents</c>: replaces the process
+    /// state, archives the instance when the process ends, and records the events.
+    /// </summary>
+    private HttpResponseMessage PutProcess(
+        int instanceOwnerPartyId,
+        Guid instanceGuid,
+        byte[]? requestBody,
+        HttpRequestMessage request,
+        bool withEvents
+    )
+    {
+        if (requestBody is null)
+        {
+            return CreateErrorResponse(HttpStatusCode.BadRequest, "No process state provided");
+        }
+
+        if (!_instances.TryGetValue($"{instanceOwnerPartyId}/{instanceGuid}", out Instance? instance))
+        {
+            return CreateErrorResponse(
+                HttpStatusCode.NotFound,
+                $"Instance with id {instanceOwnerPartyId}/{instanceGuid} not found"
+            );
+        }
+
+        if (ValidateWritePreconditions(instanceOwnerPartyId, instanceGuid, request) is { } preconditionFailure)
+        {
+            return preconditionFailure;
+        }
+
+        string json = Encoding.UTF8.GetString(requestBody);
+        ProcessState? processState;
+        if (withEvents)
+        {
+            ProcessStateUpdate? update = JsonConvert.DeserializeObject<ProcessStateUpdate>(json);
+            processState = update?.State;
+            foreach (InstanceEvent instanceEvent in update?.Events ?? [])
+            {
+                InstanceEvents.Enqueue(instanceEvent);
+            }
+        }
+        else
+        {
+            processState = JsonConvert.DeserializeObject<ProcessState>(json);
+        }
+
+        if (processState is null)
+        {
+            return CreateErrorResponse(HttpStatusCode.BadRequest, "Invalid process state content");
+        }
+
+        if (instance.Process?.Ended is null && processState.Ended is not null)
+        {
+            instance.Status ??= new InstanceStatus();
+            instance.Status.IsArchived = true;
+            instance.Status.Archived = processState.Ended;
+        }
+        instance.Process = processState;
+        instance.LastChanged = DateTime.UtcNow;
+        instance.LastChangedBy = "storage-interceptor";
+
+        StampBlobVersionIds(instance);
+        return AddVersionHeaders(
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(instance),
+                    Encoding.UTF8,
+                    "application/json"
+                ),
+            },
+            instanceOwnerPartyId,
+            instanceGuid,
+            bumpProcessStateVersion: true
+        );
+    }
+
+    /// <summary><c>POST instances/{party}/{guid}/complete</c>: the app confirms it is done with the instance.</summary>
+    private HttpResponseMessage PostComplete(int instanceOwnerPartyId, Guid instanceGuid, HttpRequestMessage request)
+    {
+        if (!_instances.TryGetValue($"{instanceOwnerPartyId}/{instanceGuid}", out Instance? instance))
+        {
+            return CreateErrorResponse(
+                HttpStatusCode.NotFound,
+                $"Instance with id {instanceOwnerPartyId}/{instanceGuid} not found"
+            );
+        }
+
+        if (ValidateWritePreconditions(instanceOwnerPartyId, instanceGuid, request) is { } preconditionFailure)
+        {
+            return preconditionFailure;
+        }
+
+        instance.CompleteConfirmations ??= [];
+        instance.CompleteConfirmations.Add(
+            new CompleteConfirmation { StakeholderId = instance.Org, ConfirmedOn = DateTime.UtcNow }
+        );
+        return CreateUpdatedInstanceResponse(instance, instanceOwnerPartyId, instanceGuid);
+    }
+
+    /// <summary><c>PUT instances/{party}/{guid}/readstatus?status=</c></summary>
+    private HttpResponseMessage PutReadStatus(int instanceOwnerPartyId, Guid instanceGuid, HttpRequestMessage request)
+    {
+        if (!_instances.TryGetValue($"{instanceOwnerPartyId}/{instanceGuid}", out Instance? instance))
+        {
+            return CreateErrorResponse(
+                HttpStatusCode.NotFound,
+                $"Instance with id {instanceOwnerPartyId}/{instanceGuid} not found"
+            );
+        }
+
+        var query = HttpUtility.ParseQueryString(request.RequestUri?.Query ?? string.Empty);
+        if (!Enum.TryParse(query["status"], ignoreCase: true, out ReadStatus readStatus))
+        {
+            return CreateErrorResponse(HttpStatusCode.BadRequest, $"Invalid read status {query["status"]}");
+        }
+
+        instance.Status ??= new InstanceStatus();
+        instance.Status.ReadStatus = readStatus;
+        return CreateUpdatedInstanceResponse(instance, instanceOwnerPartyId, instanceGuid);
+    }
+
+    /// <summary><c>PUT instances/{party}/{guid}/substatus</c></summary>
+    private HttpResponseMessage PutSubstatus(
+        int instanceOwnerPartyId,
+        Guid instanceGuid,
+        byte[]? requestBody,
+        HttpRequestMessage request
+    )
+    {
+        if (requestBody is null)
+        {
+            return CreateErrorResponse(HttpStatusCode.BadRequest, "No substatus provided");
+        }
+
+        if (!_instances.TryGetValue($"{instanceOwnerPartyId}/{instanceGuid}", out Instance? instance))
+        {
+            return CreateErrorResponse(
+                HttpStatusCode.NotFound,
+                $"Instance with id {instanceOwnerPartyId}/{instanceGuid} not found"
+            );
+        }
+
+        if (ValidateWritePreconditions(instanceOwnerPartyId, instanceGuid, request) is { } preconditionFailure)
+        {
+            return preconditionFailure;
+        }
+
+        Substatus? substatus = JsonConvert.DeserializeObject<Substatus>(Encoding.UTF8.GetString(requestBody));
+        if (substatus is null)
+        {
+            return CreateErrorResponse(HttpStatusCode.BadRequest, "Invalid substatus content");
+        }
+
+        instance.Status ??= new InstanceStatus();
+        instance.Status.Substatus = substatus;
+        return CreateUpdatedInstanceResponse(instance, instanceOwnerPartyId, instanceGuid);
+    }
+
+    /// <summary><c>GET instances/{party}/{guid}/dataelements</c></summary>
+    private HttpResponseMessage GetDataElements(int instanceOwnerPartyId, Guid instanceGuid)
+    {
+        if (!_instances.TryGetValue($"{instanceOwnerPartyId}/{instanceGuid}", out Instance? instance))
+        {
+            return CreateErrorResponse(
+                HttpStatusCode.NotFound,
+                $"Instance with id {instanceOwnerPartyId}/{instanceGuid} not found"
+            );
+        }
+
+        StampBlobVersionIds(instance);
+        var list = new DataElementList { DataElements = instance.Data ?? [] };
+        return new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(JsonConvert.SerializeObject(list), Encoding.UTF8, "application/json"),
+        };
+    }
+
+    /// <summary><c>PUT</c>/<c>DELETE instances/{party}/{guid}/data/{id}/lock</c></summary>
+    private HttpResponseMessage SetDataLock(
+        int instanceOwnerPartyId,
+        Guid instanceGuid,
+        Guid dataId,
+        HttpRequestMessage request,
+        bool locked
+    )
+    {
+        if (!_instances.TryGetValue($"{instanceOwnerPartyId}/{instanceGuid}", out Instance? instance))
+        {
+            return CreateErrorResponse(
+                HttpStatusCode.NotFound,
+                $"Instance with id {instanceOwnerPartyId}/{instanceGuid} not found"
+            );
+        }
+
+        DataElement? dataElement = instance.Data.FirstOrDefault(de => de.Id == dataId.ToString());
+        if (dataElement is null)
+        {
+            return CreateErrorResponse(
+                HttpStatusCode.NotFound,
+                $"Data element with id {dataId} not found in instance {instanceOwnerPartyId}/{instanceGuid}"
+            );
+        }
+
+        if (ValidateWritePreconditions(instanceOwnerPartyId, instanceGuid, request) is { } preconditionFailure)
+        {
+            return preconditionFailure;
+        }
+
+        dataElement.Locked = locked;
+        dataElement.LastChanged = DateTime.UtcNow;
+        return AddVersionHeaders(
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    JsonConvert.SerializeObject(dataElement),
+                    Encoding.UTF8,
+                    "application/json"
+                ),
+            },
+            instanceOwnerPartyId,
+            instanceGuid
+        );
+    }
+
+    /// <summary>The instance as it is, with the current versions, for reads and creation.</summary>
+    private HttpResponseMessage CreateInstanceResponse(
+        Instance instance,
+        int instanceOwnerPartyId,
+        Guid instanceGuid,
+        HttpStatusCode status = HttpStatusCode.OK
+    )
+    {
+        StampBlobVersionIds(instance);
+        string instanceId = $"{instanceOwnerPartyId}/{instanceGuid}";
+        var response = new HttpResponseMessage(status)
+        {
+            Content = new StringContent(
+                System.Text.Json.JsonSerializer.Serialize(instance),
+                Encoding.UTF8,
+                "application/json"
+            ),
+        };
+        response.Headers.Add(
+            "Instance-Version",
+            _instanceVersions.GetOrAdd(instanceId, 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+        );
+        response.Headers.Add(
+            "Process-State-Version",
+            _processStateVersions.GetOrAdd(instanceId, 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+        );
+        return response;
+    }
+
+    /// <summary>The instance after a change to it, with the instance version bumped.</summary>
+    private HttpResponseMessage CreateUpdatedInstanceResponse(
+        Instance instance,
+        int instanceOwnerPartyId,
+        Guid instanceGuid
+    )
+    {
+        instance.LastChanged = DateTime.UtcNow;
+        instance.LastChangedBy = "storage-interceptor";
+        StampBlobVersionIds(instance);
+        return AddVersionHeaders(
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(instance),
+                    Encoding.UTF8,
+                    "application/json"
+                ),
+            },
+            instanceOwnerPartyId,
+            instanceGuid
+        );
+    }
 
     private bool TryParseDataElementMetadataUrl(
         string[] pathSegments,

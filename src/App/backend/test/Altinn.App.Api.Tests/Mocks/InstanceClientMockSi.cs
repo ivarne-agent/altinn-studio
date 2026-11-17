@@ -593,19 +593,6 @@ internal sealed class InstanceClientMockSi : IInstanceClient, IInstanceClientWit
         // mock does not set last changed by, but this is set by the platform.
         storedInstance.LastChangedBy = string.Empty;
 
-        if (hard)
-        {
-            // The platform keeps a hard-deleted instance out of every later read, which for this mock means its
-            // files go, so that the instances tests create do not pile up in the test data folder.
-            File.Delete(instancePath);
-            string dataPath = Path.Join(Path.GetDirectoryName(instancePath), instanceGuid.ToString());
-            if (Directory.Exists(dataPath))
-            {
-                Directory.Delete(dataPath, recursive: true);
-            }
-            return storedInstance;
-        }
-
         await WriteJsonFile(instancePath, storedInstance);
 
         return storedInstance;

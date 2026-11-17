@@ -3,13 +3,15 @@ using System.Diagnostics;
 using Altinn.App.Api.Tests.Data;
 using Altinn.App.Api.Tests.Fixtures.Instances;
 using Altinn.App.Api.Tests.Fixtures.Platform;
-using Altinn.App.Api.Tests.Mocks;
 using Altinn.App.Core.Configuration;
+using Altinn.App.Core.Features;
+using Altinn.App.Core.Features.Maskinporten.Models;
 using Altinn.App.Core.Internal.Data;
 using Altinn.App.Core.Internal.Instances;
 using Altinn.App.Core.Internal.WorkflowEngine;
 using Altinn.App.Core.Internal.WorkflowEngine.Http;
 using Altinn.App.Core.Models;
+using Altinn.App.Tests.Common.Mocks;
 using Altinn.Platform.Storage.Interface.Models;
 using App.IntegrationTests.Mocks.Services;
 using Microsoft.AspNetCore.Hosting;
@@ -30,7 +32,7 @@ namespace Altinn.App.Api.Tests.Fixtures;
 /// One started test host per test class, shared by its tests through <c>IClassFixture</c>. Building and starting
 /// a host costs several times what a request costs, so the host outlives the tests and the per-test state is
 /// reset between them instead: the mocks registered with <see cref="RegisterMock{T}"/>, <see cref="SendAsync"/>,
-/// the <see cref="TelemetrySink"/>, the storage metadata and the fake workflow engine.
+/// the <see cref="TelemetrySink"/>, the in-memory <see cref="Storage"/> and the fake workflow engine.
 /// </summary>
 /// <remarks>
 /// Derive a sealed fixture per test class that names the app under test and makes its class-level registrations
@@ -51,6 +53,19 @@ public abstract class AppApiFixture : WebApplicationFactory<Program>, IAsyncLife
     private readonly Dictionary<string, string?> _configOverrides = new();
     private readonly List<InstanceIdentifier> _createdInstances = [];
     private ITestOutputHelper? _output;
+
+    /// <summary>
+    /// The in-memory Storage API behind the app's own storage clients: seed instances, read them back or assert on
+    /// <see cref="StorageClientInterceptor.RequestsResponses"/>. Emptied before every test.
+    /// </summary>
+    public StorageClientInterceptor Storage => Services.GetRequiredService<StorageClientInterceptor>();
+
+    /// <summary>
+    /// How a test authenticates to storage when it calls the clients itself, outside a request: a service owner
+    /// token from the platform. Inside a request the clients use the request's own user.
+    /// </summary>
+    public StorageAuthenticationMethod StorageAuthentication =>
+        StorageAuthenticationMethod.Custom(async () => JwtToken.Parse(await Platform.GetServiceOwnerToken()));
 
     /// <summary>The id of the test the host is serving, set by <see cref="BeginTest"/>.</summary>
     public TestId CurrentTestId =>
@@ -257,7 +272,7 @@ public abstract class AppApiFixture : WebApplicationFactory<Program>, IAsyncLife
         ConfigureMocks();
 
         Services.GetRequiredService<TelemetrySink>().Clear();
-        Services.GetService<ApiTestStorageMetadata>()?.Clear();
+        Storage.Clear();
         (Services.GetService<IWorkflowEngineClient>() as FakeWorkflowEngineClient)?.Clear();
     }
 
@@ -277,8 +292,9 @@ public abstract class AppApiFixture : WebApplicationFactory<Program>, IAsyncLife
 
     /// <summary>
     /// Creates a new instance from <paramref name="template"/> through the host's <see cref="IInstanceClient"/> and
-    /// <see cref="IDataClient"/>, the platform assigning the instance guid and the data element ids, and returns it
-    /// as the platform stores it. The instance is tracked and deleted by <see cref="DeleteCreatedInstances"/>.
+    /// <see cref="IDataClient"/>, the app's own clients talking to <see cref="Storage"/>, which assigns the instance
+    /// guid and the data element ids. Returns the instance as stored. It is tracked and deleted by
+    /// <see cref="DeleteCreatedInstances"/>.
     /// </summary>
     public async Task<Instance> CreateInstance(InstanceTemplate template, CancellationToken cancellationToken = default)
     {
@@ -286,11 +302,12 @@ public abstract class AppApiFixture : WebApplicationFactory<Program>, IAsyncLife
         var instanceClient = scope.ServiceProvider.GetRequiredService<IInstanceClient>();
         var dataClient = scope.ServiceProvider.GetRequiredService<IDataClient>();
 
+        StorageAuthenticationMethod authentication = StorageAuthentication;
         Instance created = await instanceClient.CreateInstance(
             template.Org,
             template.App,
             template.ToInstance(),
-            authenticationMethod: null,
+            authentication,
             cancellationToken
         );
         var identifier = new InstanceIdentifier(created);
@@ -307,7 +324,7 @@ public abstract class AppApiFixture : WebApplicationFactory<Program>, IAsyncLife
                     created,
                     element.DataType,
                     element.Model,
-                    authenticationMethod: null,
+                    authentication,
                     cancellationToken
                 );
             }
@@ -324,7 +341,7 @@ public abstract class AppApiFixture : WebApplicationFactory<Program>, IAsyncLife
                     element.Filename,
                     content,
                     generatedFromTask: null,
-                    authenticationMethod: null,
+                    authentication,
                     cancellationToken
                 );
             }
@@ -335,7 +352,7 @@ public abstract class AppApiFixture : WebApplicationFactory<Program>, IAsyncLife
             template.Org,
             identifier.InstanceOwnerPartyId,
             identifier.InstanceGuid,
-            authenticationMethod: null,
+            authentication,
             cancellationToken
         );
     }
@@ -363,7 +380,12 @@ public abstract class AppApiFixture : WebApplicationFactory<Program>, IAsyncLife
         {
             try
             {
-                await instanceClient.DeleteInstance(instance.InstanceOwnerPartyId, instance.InstanceGuid, hard: true);
+                await instanceClient.DeleteInstance(
+                    instance.InstanceOwnerPartyId,
+                    instance.InstanceGuid,
+                    hard: true,
+                    StorageAuthentication
+                );
             }
             catch (Exception e)
             {

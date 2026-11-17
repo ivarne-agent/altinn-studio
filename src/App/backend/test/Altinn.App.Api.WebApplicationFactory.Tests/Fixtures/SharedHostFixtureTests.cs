@@ -3,6 +3,8 @@ using System.Net;
 using Altinn.App.Api.Models;
 using Altinn.App.Api.Tests.Data.apps.tdd.contributer_restriction.models;
 using Altinn.App.Api.Tests.Fixtures.Instances;
+using Altinn.App.Core.Helpers;
+using Altinn.App.Core.Infrastructure.Clients.Storage;
 using Altinn.App.Core.Internal.Data;
 using Altinn.App.Core.Internal.Instances;
 using Altinn.App.Core.Models;
@@ -17,7 +19,7 @@ namespace Altinn.App.Api.Tests.Fixtures;
 
 /// <summary>
 /// Proves the shared-host pattern itself: the tests of this class share one host, the per-test state is reset
-/// between them, and what a test creates is gone when it ends. The tests must hold whichever order they run in,
+/// between them, what a test creates is gone when it ends, and the app reaches storage through its own clients. The tests must hold whichever order they run in,
 /// so each records what it saw in a static and checks the records of the tests before it.
 /// </summary>
 public sealed class SharedHostFixtureTests : ApiTestBase<SharedHostFixtureTests.SharedHostFixture>
@@ -129,6 +131,34 @@ public sealed class SharedHostFixtureTests : ApiTestBase<SharedHostFixtureTests.
     }
 
     [Fact]
+    public async Task App_reaches_storage_through_its_own_client_and_the_in_memory_storage_api()
+    {
+        Services.GetRequiredService<IInstanceClient>().Should().BeOfType<InstanceClient>();
+        Services.GetRequiredService<IDataClient>().Should().BeOfType<DataClient>();
+
+        Instance instance = await CreateInstance(
+            new InstanceTemplate(Org, App, TestAuthentication.DefaultUserPartyId).InTask("Task_1")
+        );
+        Fixture.Storage.RequestsResponses.Clear();
+
+        using var client = await GetUserClient(partyId: TestAuthentication.DefaultUserPartyId);
+        using var response = await client.GetAsync(
+            $"/{Org}/{App}/instances/{instance.Id}",
+            TestContext.Current.CancellationToken
+        );
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        Fixture
+            .Storage.RequestsResponses.Should()
+            .Contain(r =>
+                r.RequestMethod == HttpMethod.Get
+                && r.RequestUrl != null
+                && r.RequestUrl.AbsolutePath == $"/storage/api/v1/instances/{instance.Id}"
+                && r.ResponseStatusCode == HttpStatusCode.OK
+            );
+    }
+
+    [Fact]
     public async Task Instance_from_a_loaded_template_equals_one_from_a_code_template()
     {
         await AssertInstancesOfEarlierTestsAreGone();
@@ -208,7 +238,7 @@ public sealed class SharedHostFixtureTests : ApiTestBase<SharedHostFixtureTests.
         object formData = await dataClient.GetFormData(
             instance,
             element,
-            authenticationMethod: null,
+            Fixture.StorageAuthentication,
             TestContext.Current.CancellationToken
         );
         return formData.Should().BeOfType<Skjema>().Subject;
@@ -222,9 +252,11 @@ public sealed class SharedHostFixtureTests : ApiTestBase<SharedHostFixtureTests.
         }
     }
 
-    /// <summary>The mock throws for a missing file where the real client gets a 404; both mean gone.</summary>
+    /// <summary>A hard-deleted instance is a 404 from storage, and the in-memory storage no longer holds it.</summary>
     private async Task AssertInstanceIsGone(InstanceIdentifier instance)
     {
+        Fixture.Storage.FindInstance(instance.InstanceOwnerPartyId, instance.InstanceGuid).Should().BeNull();
+
         await using var scope = Services.CreateAsyncScope();
         var instanceClient = scope.ServiceProvider.GetRequiredService<IInstanceClient>();
         Func<Task> read = () =>
@@ -233,15 +265,13 @@ public sealed class SharedHostFixtureTests : ApiTestBase<SharedHostFixtureTests.
                 Org,
                 instance.InstanceOwnerPartyId,
                 instance.InstanceGuid,
-                authenticationMethod: null,
+                Fixture.StorageAuthentication,
                 TestContext.Current.CancellationToken
             );
-        await read.Should().ThrowAsync<Exception>().Where(e => IsNotFound(e));
+        await read.Should()
+            .ThrowAsync<PlatformHttpException>()
+            .Where(e => e.Response.StatusCode == HttpStatusCode.NotFound);
     }
-
-    private static bool IsNotFound(Exception e) =>
-        e is FileNotFoundException
-        || e is Altinn.App.Core.Helpers.PlatformHttpException { Response.StatusCode: HttpStatusCode.NotFound };
 
     private sealed class OwnHostMarker;
 }

@@ -51,14 +51,16 @@
 
   <!--
     Test infrastructure shared with the v2 project while the tests move. Files that are tests themselves, the v2
-    test host (Program.cs) and the v2 base class (CustomWebApplicationFactory.cs) are not linked.
+    test host (Program.cs), the v2 base class (CustomWebApplicationFactory.cs) and the file-backed storage mocks
+    (InstanceClientMockSi, DataClientMock, ApiTestStorageMetadata) are not linked: storage is the in-memory
+    StorageClientInterceptor from Tests.Common behind the app's real clients.
     TestData.cs resolves the test data root from its own source path, so the app folders and the prepared
     instances that serve as templates are read from Altinn.App.Api.Tests/Data. This project only reads that
-    folder: instances are created through the platform clients and hard-deleted when the test ends.
+    folder.
   -->
   <ItemGroup>
     <Compile Include="../Altinn.App.Api.Tests/Data/**/*.cs" LinkBase="Data" />
-    <Compile Include="../Altinn.App.Api.Tests/Mocks/**/*.cs" Exclude="../Altinn.App.Api.Tests/Mocks/**/*Tests.cs" LinkBase="Mocks" />
+    <Compile Include="../Altinn.App.Api.Tests/Mocks/**/*.cs" Exclude="../Altinn.App.Api.Tests/Mocks/**/*Tests.cs;../Altinn.App.Api.Tests/Mocks/InstanceClientMockSi.cs;../Altinn.App.Api.Tests/Mocks/DataClientMock.cs;../Altinn.App.Api.Tests/Mocks/ApiTestStorageMetadata.cs" LinkBase="Mocks" />
     <Compile Include="../Altinn.App.Api.Tests/Models/XacmlResourceAttributes.cs" Link="Models/XacmlResourceAttributes.cs" />
     <Compile Include="../Altinn.App.Api.Tests/Utils/**/*.cs" LinkBase="Utils" />
     <Compile Include="../Altinn.App.Api.Tests/TestStubs/**/*.cs" LinkBase="TestStubs" />

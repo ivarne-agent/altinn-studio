@@ -12,7 +12,6 @@ using Altinn.App.Core.Infrastructure.Clients.Register;
 using Altinn.App.Core.Internal.App;
 using Altinn.App.Core.Internal.AppModel;
 using Altinn.App.Core.Internal.Auth;
-using Altinn.App.Core.Internal.Data;
 using Altinn.App.Core.Internal.Events;
 using Altinn.App.Core.Internal.Instances;
 using Altinn.App.Core.Internal.Profile;
@@ -164,24 +163,14 @@ void ConfigurePlatformServices(IServiceCollection services, IAppTestPlatform pla
     });
 }
 
-// Every registration here replaces a client of the platform with an in-memory stand-in.
+// Every registration here replaces a client of the platform with an in-memory stand-in. Storage is the
+// exception: the app's own InstanceClient and DataClient stay and talk to an in-memory fake of the Storage API.
 void ConfigureMockServices(IServiceCollection services)
 {
+    InMemoryStorage.Add(services);
     services.AddTransient<IAuthorizationClient, AuthorizationMock>();
-    services.AddSingleton<ApiTestStorageMetadata>();
-    services.AddTransient<InstanceClientMockSi>();
-    services.AddTransient<IInstanceClientWithStorageMetadata>(sp =>
-        (IInstanceClientWithStorageMetadata)sp.GetRequiredService<IInstanceClient>()
-    );
-    services.AddTransient<IInstanceClient>(sp => sp.GetRequiredService<InstanceClientMockSi>());
     services.AddSingleton<Altinn.Common.PEP.Interfaces.IPDP, PepWithPDPAuthorizationMockSI>();
     services.AddSingleton<IPostConfigureOptions<JwtCookieOptions>, JwtCookiePostConfigureOptionsStub>();
-    services.AddTransient<DataClientMock>();
-    services.AddTransient<IDataClientWithStorageMetadata>(sp =>
-        (IDataClientWithStorageMetadata)sp.GetRequiredService<IDataClient>()
-    );
-    services.AddTransient<IInstanceMutationClient>(sp => (IInstanceMutationClient)sp.GetRequiredService<IDataClient>());
-    services.AddTransient<IDataClient>(sp => sp.GetRequiredService<DataClientMock>());
     services.AddTransient<AltinnPartyClientInterceptor>();
     services
         .AddHttpClient<IAltinnPartyClient, AltinnPartyClient>()

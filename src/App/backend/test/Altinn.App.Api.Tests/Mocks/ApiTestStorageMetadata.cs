@@ -13,20 +13,10 @@ internal sealed class ApiTestStorageMetadata
     private readonly ConcurrentDictionary<string, InstanceState> _instances = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<(string InstanceId, Guid DataElementId), byte> _bumpBeforeNextContentRead =
         new();
-    private TaskCompletionSource _firstAggregateMutation = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _firstAggregateMutation = new(
+        TaskCreationOptions.RunContinuationsAsynchronously
+    );
     private int _aggregateMutationRequestCount;
-
-    /// <summary>
-    /// Forgets every instance and counter, so that a host shared by several tests starts each of them with
-    /// the versions a freshly prepared instance has.
-    /// </summary>
-    public void Clear()
-    {
-        _instances.Clear();
-        _bumpBeforeNextContentRead.Clear();
-        Interlocked.Exchange(ref _aggregateMutationRequestCount, 0);
-        _firstAggregateMutation = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    }
 
     public int AggregateMutationRequestCount => Volatile.Read(ref _aggregateMutationRequestCount);
 

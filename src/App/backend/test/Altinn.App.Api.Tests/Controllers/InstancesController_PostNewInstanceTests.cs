@@ -524,8 +524,10 @@ public class InstancesController_PostNewInstanceTests : ApiTestBase
         string instanceId = root.GetProperty("instanceId").GetString()!;
         string[] instanceIdParts = instanceId.Split('/');
         Guid instanceGuid = Guid.Parse(instanceIdParts[1]);
-        // A hard delete removes the instance from the mock storage, where a soft delete would have kept it flagged
-        File.Exists(TestData.GetInstancePath(org, app, instanceOwnerPartyId, instanceGuid)).Should().BeFalse();
+        Instance storedInstance = await TestData.GetInstance(org, app, instanceOwnerPartyId, instanceGuid);
+        storedInstance.Status?.IsHardDeleted.Should().BeTrue();
+
+        TestData.DeleteInstanceAndData(org, app, instanceId);
     }
 
     [Fact]
