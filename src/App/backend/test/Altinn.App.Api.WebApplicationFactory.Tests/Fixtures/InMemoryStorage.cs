@@ -10,16 +10,18 @@ namespace Altinn.App.Api.Tests.Fixtures;
 /// <summary>
 /// Points the app's own <see cref="InstanceClient"/> and <see cref="DataClient"/> at an in-memory
 /// <see cref="StorageClientInterceptor"/>, so that the real client code runs against a fake of the Storage API
-/// and nothing touches the file system. One interceptor per host, built from the application metadata the host
-/// loaded (after the app files hooks ran), and reset between tests by the fixture.
+/// and nothing touches the file system. One interceptor per host, reading the application metadata of the
+/// current app files on every use (so it follows a snapshot swap), and reset between tests by the fixture.
 /// </summary>
 internal static class InMemoryStorage
 {
     public static void Add(IServiceCollection services)
     {
-        services.AddSingleton(sp => new StorageClientInterceptor(
-            sp.GetRequiredService<IAppMetadata>().ApplicationMetadata
-        ));
+        services.AddSingleton(sp =>
+        {
+            IAppMetadata appMetadata = sp.GetRequiredService<IAppMetadata>();
+            return new StorageClientInterceptor(() => appMetadata.ApplicationMetadata);
+        });
         services
             .AddHttpClient<IDataClient, DataClient>()
             .ConfigurePrimaryHttpMessageHandler(sp => new ForwardingHandler(

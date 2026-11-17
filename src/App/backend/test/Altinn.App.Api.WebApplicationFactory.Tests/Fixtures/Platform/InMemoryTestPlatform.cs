@@ -3,8 +3,8 @@ using Altinn.App.Core.Configuration;
 namespace Altinn.App.Api.Tests.Fixtures.Platform;
 
 /// <summary>
-/// The platform as the in-memory mocks model it: tokens signed with the test certificate, and settings that no
-/// mock reads.
+/// The platform as the in-memory fakes model it: tokens signed with the test certificate, and settings that no
+/// fake reads.
 /// </summary>
 internal sealed class InMemoryTestPlatform : IAppTestPlatform
 {

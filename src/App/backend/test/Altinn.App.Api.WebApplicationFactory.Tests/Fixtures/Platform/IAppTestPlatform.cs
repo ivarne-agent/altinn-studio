@@ -4,11 +4,10 @@ namespace Altinn.App.Api.Tests.Fixtures.Platform;
 
 /// <summary>
 /// What a test needs from the platform behind the app that the app's own clients cannot give it: tokens, and
-/// the settings that point the app at the platform. Instances are created and deleted through the host's
-/// <c>IInstanceClient</c> and <c>IDataClient</c> instead (<see cref="AppApiFixture.CreateInstance"/>), which are
-/// mocks or the real clients depending on <see cref="Kind"/>. Tests reach the platform through
-/// <see cref="ApiTestBase{TFixture}"/> and <see cref="AppApiFixture"/> only, so that a second implementation
-/// changes no test.
+/// the settings that point the app at the platform. Instances come from <see cref="AppTestFixture.CreateInstance"/>,
+/// which seeds the in-memory storage directly or, against localtest, goes through the app's own clients. Tests
+/// reach the platform through <see cref="ApiTestBase{TFixture}"/> and <see cref="AppTestFixture"/> only, so that
+/// a second implementation changes no test.
 /// </summary>
 public interface IAppTestPlatform
 {

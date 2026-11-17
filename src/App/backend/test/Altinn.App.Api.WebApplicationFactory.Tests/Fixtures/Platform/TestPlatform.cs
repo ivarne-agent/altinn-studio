@@ -5,7 +5,7 @@ namespace Altinn.App.Api.Tests.Fixtures.Platform;
 /// </summary>
 public enum TestPlatform
 {
-    /// <summary>In-memory mocks of the platform clients, registered by the test host.</summary>
+    /// <summary>In-memory fakes of the platform clients, registered by the test host.</summary>
     InMemory,
 
     /// <summary>A running localtest, reached by the real clients from Altinn.App.Core. Not implemented yet.</summary>
@@ -53,7 +53,7 @@ public static class TestPlatformSelection
                 $"{nameof(TestPlatform.Localtest)} is not implemented. It needs an {nameof(IAppTestPlatform)} that "
                     + "fetches tokens from localtest, the localtest branch of ConfigurePlatformServices in "
                     + "Program.cs, and a host that listens on a real port "
-                    + $"({nameof(AppApiFixture)}.ConfigureWebHost)."
+                    + $"({nameof(AppTestFixture)}.ConfigureWebHost)."
             ),
             _ => throw new ArgumentOutOfRangeException(nameof(Current), Current, "Unknown test platform"),
         };

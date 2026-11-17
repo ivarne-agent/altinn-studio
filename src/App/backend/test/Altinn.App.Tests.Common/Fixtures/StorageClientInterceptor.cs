@@ -49,23 +49,39 @@ public class StorageClientInterceptor : HttpMessageHandler
     };
 
     public StorageClientInterceptor(ApplicationMetadata appMetadata, bool stampDataElementBlobVersionIds = true)
+        : this(() => appMetadata, stampDataElementBlobVersionIds) { }
+
+    /// <param name="appMetadata">
+    /// Resolves the application metadata on every use, for a host whose app files are replaced while it runs.
+    /// </param>
+    /// <param name="stampDataElementBlobVersionIds">Whether data elements get a blob version id when added.</param>
+    public StorageClientInterceptor(Func<ApplicationMetadata> appMetadata, bool stampDataElementBlobVersionIds = true)
     {
-        AppMetadata = appMetadata;
+        _appMetadata = appMetadata;
         StampDataElementBlobVersionIds = stampDataElementBlobVersionIds;
-        AppMetadata.Title ??= new()
-        {
-            { LanguageConst.Nb, "Testapplikasjon" },
-            { LanguageConst.En, "Mocked Test App" },
-        };
-        AppMetadata.DataTypes ??= [];
     }
+
+    private readonly Func<ApplicationMetadata> _appMetadata;
 
     public ConcurrentBag<RequestResponse> RequestsResponses { get; } = new();
 
     /// <summary>The events PUT to <c>process/instanceandevents</c>, in the order they arrived.</summary>
     public ConcurrentQueue<InstanceEvent> InstanceEvents { get; } = new();
 
-    public ApplicationMetadata AppMetadata { get; }
+    public ApplicationMetadata AppMetadata
+    {
+        get
+        {
+            ApplicationMetadata appMetadata = _appMetadata();
+            appMetadata.Title ??= new()
+            {
+                { LanguageConst.Nb, "Testapplikasjon" },
+                { LanguageConst.En, "Mocked Test App" },
+            };
+            appMetadata.DataTypes ??= [];
+            return appMetadata;
+        }
+    }
     public bool StampDataElementBlobVersionIds { get; }
     public bool EnforceExpectedProcessStatus { get; set; }
     public string? ForcedMutationConflictMessage { get; set; }

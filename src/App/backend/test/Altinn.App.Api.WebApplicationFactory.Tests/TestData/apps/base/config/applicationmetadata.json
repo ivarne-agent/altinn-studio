@@ -1,0 +1,15 @@
+{
+  "id": "ttd/base-app",
+  "org": "ttd",
+  "title": { "nb": "Base app for the test hosts" },
+  "dataTypes": [
+    {
+      "id": "default",
+      "allowedContentTypes": ["application/xml"],
+      "maxCount": 1,
+      "appLogic": { "classRef": "Altinn.App.Api.Tests.Models.Skjema" },
+      "taskIds": ["Task_1"]
+    }
+  ],
+  "partyTypesAllowed": { "bankruptcyEstate": true, "organisation": true, "person": true, "subUnit": true }
+}

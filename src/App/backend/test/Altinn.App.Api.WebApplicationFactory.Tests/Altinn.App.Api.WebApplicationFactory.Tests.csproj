@@ -1,9 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    xunit v3 home for the WebApplicationFactory-based API tests, which Altinn.App.Api.Tests (xunit v2) hands over in
-    batches. Until the move is complete the test infrastructure (test host, mocks, test data) is linked from the v2
-    project so that there is one copy of it.
+    xunit v3 home for the WebApplicationFactory-based API tests. The tests of a class share one started host, the
+    app under test is an AppFiles snapshot built in code or loaded from TestData/apps, and the platform behind the
+    app is in memory: the StorageClientInterceptor from Tests.Common behind the app's own storage clients, and the
+    fakes in Mocks/ for everything else.
   -->
   <PropertyGroup>
     <TargetFramework>net11.0</TargetFramework>
@@ -49,24 +50,10 @@
     <ProjectReference Include="../Altinn.App.Tests.Common.XunitV3/Altinn.App.Tests.Common.XunitV3.csproj"/>
   </ItemGroup>
 
-  <!--
-    Test infrastructure shared with the v2 project while the tests move. Files that are tests themselves, the v2
-    test host (Program.cs), the v2 base class (CustomWebApplicationFactory.cs) and the file-backed storage mocks
-    (InstanceClientMockSi, DataClientMock, ApiTestStorageMetadata) are not linked: storage is the in-memory
-    StorageClientInterceptor from Tests.Common behind the app's real clients.
-    TestData.cs resolves the test data root from its own source path, so the app folders and the prepared
-    instances that serve as templates are read from Altinn.App.Api.Tests/Data. This project only reads that
-    folder.
-  -->
+  <!-- The app folders the hosts load from and the platform data the fakes start with, read from the build output. -->
   <ItemGroup>
-    <Compile Include="../Altinn.App.Api.Tests/Data/**/*.cs" LinkBase="Data" />
-    <Compile Include="../Altinn.App.Api.Tests/Mocks/**/*.cs" Exclude="../Altinn.App.Api.Tests/Mocks/**/*Tests.cs;../Altinn.App.Api.Tests/Mocks/InstanceClientMockSi.cs;../Altinn.App.Api.Tests/Mocks/DataClientMock.cs;../Altinn.App.Api.Tests/Mocks/ApiTestStorageMetadata.cs" LinkBase="Mocks" />
-    <Compile Include="../Altinn.App.Api.Tests/Models/XacmlResourceAttributes.cs" Link="Models/XacmlResourceAttributes.cs" />
-    <Compile Include="../Altinn.App.Api.Tests/Utils/**/*.cs" LinkBase="Utils" />
-    <Compile Include="../Altinn.App.Api.Tests/TestStubs/**/*.cs" LinkBase="TestStubs" />
-    <Compile Include="../Altinn.App.Api.Tests/Extensions/HttpClientExtensions.cs" Link="Extensions/HttpClientExtensions.cs" />
-    <Compile Include="../Altinn.App.Api.Tests/FakeWorkflowEngineClient.cs" Link="FakeWorkflowEngineClient.cs" />
-    <Compile Include="../Altinn.App.Api.Tests/WorkflowCallbackHttpContextAccessor.cs" Link="WorkflowCallbackHttpContextAccessor.cs" />
-    <Compile Include="../Altinn.App.Api.Tests/MockHttpMessageHandler.cs" Link="MockHttpMessageHandler.cs" />
+    <Content Include="TestData/**/*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 </Project>

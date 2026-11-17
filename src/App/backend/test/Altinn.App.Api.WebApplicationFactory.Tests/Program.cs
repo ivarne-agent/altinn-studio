@@ -1,14 +1,9 @@
 using Altinn.App.Api.Extensions;
 using Altinn.App.Api.Helpers;
-using Altinn.App.Api.Tests.Data;
 using Altinn.App.Api.Tests.Fixtures;
 using Altinn.App.Api.Tests.Fixtures.Platform;
 using Altinn.App.Api.Tests.Mocks;
-using Altinn.App.Api.Tests.Mocks.Authentication;
-using Altinn.App.Api.Tests.Mocks.Event;
 using Altinn.App.Core.Configuration;
-using Altinn.App.Core.Features;
-using Altinn.App.Core.Infrastructure.Clients.Register;
 using Altinn.App.Core.Internal.App;
 using Altinn.App.Core.Internal.AppModel;
 using Altinn.App.Core.Internal.Auth;
@@ -18,9 +13,7 @@ using Altinn.App.Core.Internal.Profile;
 using Altinn.App.Core.Internal.Registers;
 using Altinn.App.Core.Internal.Sign;
 using Altinn.App.Tests.Common;
-using Altinn.App.Tests.Common.Mocks;
 using AltinnCore.Authentication.JwtCookie;
-using App.IntegrationTests.Mocks.Services;
 using Microsoft.ApplicationInsights.AspNetCore.Extensions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -33,7 +26,7 @@ using Microsoft.OpenApi;
 
 // An xunit v3 test project is an executable. The test runner starts this program to run the tests, and
 // WebApplicationFactory invokes the same entry point again, on a thread of its own, to build each test host.
-if (!AppApiFixture.IsWebApplicationFactoryCall(args))
+if (!AppTestFixture.IsWebApplicationFactoryCall(args))
 {
     return await Xunit.Runner.InProc.SystemConsole.ConsoleRunner.Run(args);
 }
@@ -44,18 +37,18 @@ if (!AppApiFixture.IsWebApplicationFactoryCall(args))
 // External interfaces like Platform related services, Authentication, Authorization
 // external api's etc. should be mocked.
 
-// Use the test app as the default content root. Startup validation needs its process and application
-// metadata; the build output contains only stub metadata.
+// The host starts from the base app in TestData/apps so that AddAltinnAppServices has files to load and the
+// startup validation something to validate; the fixture replaces the snapshot with the app under test before
+// the host serves a request.
 string? contentRootFromArgs = new ConfigurationBuilder().AddCommandLine(args).Build()[WebHostDefaults.ContentRootKey];
+string contentRoot = Directory.Exists(contentRootFromArgs) ? contentRootFromArgs : TestApps.Base;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(
     new WebApplicationOptions()
     {
-        ContentRootPath = Directory.Exists(contentRootFromArgs)
-            ? contentRootFromArgs
-            : TestData.GetApplicationDirectory("tdd", "contributer-restriction"),
+        ContentRootPath = contentRoot,
         ApplicationName = "Altinn.App.Api.WebApplicationFactory.Tests",
-        WebRootPath = Path.Join(TestData.GetTestDataRootDirectory(), "apps", "tdd", "contributer-restriction"),
+        WebRootPath = contentRoot,
         EnvironmentName = "Production",
     }
 );
@@ -68,7 +61,7 @@ builder.WebHost.UseDefaultServiceProvider(
     }
 );
 
-AppApiFixture.ConfigureFakeLogging(builder.Logging);
+AppTestFixture.ConfigureFakeLogging(builder.Logging);
 
 // The host is shared by the tests of a class, so the current test is a value the fixture changes between
 // tests rather than a singleton fixed when the host is built. The fixture replaces this registration with
@@ -76,9 +69,7 @@ AppApiFixture.ConfigureFakeLogging(builder.Logging);
 builder.Services.TryAddSingleton<CurrentTestId>();
 builder.Services.AddSingleton<IStartupFilter, CurrentTestIdStartupFilter>();
 
-builder.Configuration.AddJsonFile(
-    Path.Join(TestData.GetTestDataRootDirectory(), "apps", "tdd", "contributer-restriction", "appsettings.json")
-);
+builder.Configuration.AddJsonFile(Path.Join(TestApps.Base, "appsettings.json"));
 builder.Configuration.GetSection("MetricsSettings:Enabled").Value = "false";
 builder.Configuration.GetSection("AppSettings:UseOpenTelemetry").Value = "true";
 builder.Services.Configure<ApplicationInsightsServiceOptions>(options =>
@@ -117,7 +108,7 @@ void ConfigureServices(IServiceCollection services, IConfiguration config)
     });
 }
 
-// The platform the app talks to: in-memory mocks, or (once implemented) a real localtest that the
+// The platform the app talks to: in-memory fakes, or (once implemented) a real localtest that the
 // unchanged clients from Altinn.App.Core reach through the platform settings.
 void ConfigurePlatformServices(IServiceCollection services, IAppTestPlatform platform)
 {
@@ -126,7 +117,7 @@ void ConfigurePlatformServices(IServiceCollection services, IAppTestPlatform pla
     switch (platform.Kind)
     {
         case TestPlatform.InMemory:
-            ConfigureMockServices(services);
+            ConfigureInMemoryPlatform(services);
             break;
         case TestPlatform.Localtest:
             throw new NotSupportedException(
@@ -163,20 +154,20 @@ void ConfigurePlatformServices(IServiceCollection services, IAppTestPlatform pla
     });
 }
 
-// Every registration here replaces a client of the platform with an in-memory stand-in. Storage is the
-// exception: the app's own InstanceClient and DataClient stay and talk to an in-memory fake of the Storage API.
-void ConfigureMockServices(IServiceCollection services)
+// Every registration here replaces a client of the platform with an in-memory fake. Storage is the exception:
+// the app's own InstanceClient and DataClient stay and talk to an in-memory fake of the Storage API. The fakes
+// read parties, users and roles from the TestPlatformData the fixture owns, and the policy from the app files.
+void ConfigureInMemoryPlatform(IServiceCollection services)
 {
     InMemoryStorage.Add(services);
-    services.AddTransient<IAuthorizationClient, AuthorizationMock>();
-    services.AddSingleton<Altinn.Common.PEP.Interfaces.IPDP, PepWithPDPAuthorizationMockSI>();
+    services.TryAddSingleton(sp => TestPlatformData.LoadDefaults());
+    services.AddTransient<IAuthorizationClient, InMemoryAuthorizationClient>();
+    services.AddSingleton<Altinn.Common.PEP.Interfaces.IPDP, InMemoryPdp>();
     services.AddSingleton<IPostConfigureOptions<JwtCookieOptions>, JwtCookiePostConfigureOptionsStub>();
-    services.AddTransient<AltinnPartyClientInterceptor>();
-    services
-        .AddHttpClient<IAltinnPartyClient, AltinnPartyClient>()
-        .ConfigurePrimaryHttpMessageHandler<AltinnPartyClientInterceptor>();
-    services.AddTransient<IRegisterClient, RegisterClientMock>();
-    services.AddTransient<IProfileClient, ProfileClientMock>();
+    services.RemoveAll<IAltinnPartyClient>();
+    services.AddTransient<IAltinnPartyClient, InMemoryPartyClient>();
+    services.AddTransient<IRegisterClient, InMemoryRegisterClient>();
+    services.AddTransient<IProfileClient, InMemoryProfileClient>();
     services.AddTransient<IInstanceEventClient, InstanceEventClientMock>();
     services.AddTransient<IAppModel, AppModelMock<Program>>();
     services.AddTransient<IEventsClient, EventsClientMock>();

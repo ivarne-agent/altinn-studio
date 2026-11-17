@@ -68,7 +68,7 @@ public sealed class MockedServiceCollection
 
     public MockedServiceCollection()
     {
-        Storage = new StorageClientInterceptor(new($"{Org}/{App}"));
+        Storage = new StorageClientInterceptor(new ApplicationMetadata($"{Org}/{App}"));
         Services.AddSingleton(this);
         Services.AddSingleton(Storage);
         Services.AddSingleton(FakeHttpMessageHandler);

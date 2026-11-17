@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Xml.Serialization;
 using Altinn.App.Core.Features;
+using Altinn.App.Core.Internal.App;
 using Altinn.App.Core.Internal.Process.Elements;
 using Altinn.App.Core.Internal.Process.Elements.AltinnExtensionProperties;
 using Altinn.App.Core.Internal.Process.Elements.Base;
@@ -12,16 +13,48 @@ namespace Altinn.App.Core.Internal.Process;
 /// </summary>
 internal sealed class ProcessReader : IProcessReader
 {
-    private readonly Definitions _definitions;
+    private readonly IProcessClient _processClient;
+    private readonly AppFilesAccessor? _appFiles;
     private readonly Telemetry? _telemetry;
+    private volatile ParsedDefinitions _parsed;
 
     /// <summary>
     /// Create instance of ProcessReader where process stream is fetched from <see cref="IProcessClient"/>
     /// </summary>
     /// <param name="processClient">Implementation of IProcessClient used to get stream of BPMN process</param>
     /// <param name="telemetry">Telemetry for metrics and traces.</param>
+    /// <param name="appFiles">
+    /// The app files the process definition comes from. The definition is parsed once per snapshot, so a reader
+    /// that lives for the whole app follows the snapshot when it is replaced, as every other reader of the files does.
+    /// </param>
     /// <exception cref="InvalidOperationException">If BPMN file could not be deserialized</exception>
-    public ProcessReader(IProcessClient processClient, Telemetry? telemetry = null)
+    public ProcessReader(IProcessClient processClient, Telemetry? telemetry = null, AppFilesAccessor? appFiles = null)
+    {
+        _processClient = processClient;
+        _appFiles = appFiles;
+        _telemetry = telemetry;
+        // Parsed here, so a broken process definition fails when the reader is created rather than on first use
+        _parsed = new ParsedDefinitions(appFiles?.Current, Parse(processClient));
+    }
+
+    private Definitions _definitions
+    {
+        get
+        {
+            AppFiles? files = _appFiles?.Current;
+            ParsedDefinitions parsed = _parsed;
+            if (ReferenceEquals(parsed.Source, files))
+            {
+                return parsed.Definitions;
+            }
+
+            parsed = new ParsedDefinitions(files, Parse(_processClient));
+            _parsed = parsed;
+            return parsed.Definitions;
+        }
+    }
+
+    private static Definitions Parse(IProcessClient processClient)
     {
         XmlSerializer serializer = new XmlSerializer(typeof(Definitions));
         // TODO: IO should be async
@@ -31,11 +64,11 @@ internal sealed class ProcessReader : IProcessReader
         Definitions? definitions = (Definitions?)serializer.Deserialize(stream);
 #pragma warning restore CA5369 // Use XmlReader for 'XmlSerializer.Deserialize()'
 
-        _definitions =
-            definitions
+        return definitions
             ?? throw new InvalidOperationException("Failed to deserialize BPMN definitions. Definitions was null");
-        _telemetry = telemetry;
     }
+
+    private sealed record ParsedDefinitions(AppFiles? Source, Definitions Definitions);
 
     /// <inheritdoc />
     public List<StartEvent> GetStartEvents()

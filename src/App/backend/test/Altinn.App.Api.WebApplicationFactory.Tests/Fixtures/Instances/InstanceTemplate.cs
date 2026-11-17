@@ -1,22 +1,14 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using Altinn.App.Api.Tests.Data;
 using Altinn.Platform.Storage.Interface.Models;
 
 namespace Altinn.App.Api.Tests.Fixtures.Instances;
 
 /// <summary>
 /// What a test wants an instance to look like before it starts: owner, process state and data elements. The
-/// platform assigns every id when <see cref="AppApiFixture.CreateInstance"/> creates it, so one template can be
-/// created any number of times. Build one in code, or <see cref="Load"/> a prepared instance from the test data.
+/// platform assigns every id when <see cref="AppTestFixture.CreateInstance"/> creates it, so one template can be
+/// created any number of times.
 /// </summary>
 public sealed record InstanceTemplate(string Org, string App, int InstanceOwnerPartyId)
 {
-    private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        Converters = { new JsonStringEnumConverter() },
-    };
-
     public string? InstanceOwnerPersonNumber { get; init; }
 
     public string? InstanceOwnerOrganisationNumber { get; init; }
@@ -54,20 +46,26 @@ public sealed record InstanceTemplate(string Org, string App, int InstanceOwnerP
     }
 
     /// <summary>A data element with <paramref name="model"/> serialized the way the app stores that data type.</summary>
-    public InstanceTemplate WithFormData(string dataType, object model) =>
+    public InstanceTemplate WithFormData(string dataType, object model, Action<DataElement>? configure = null) =>
         this with
         {
-            DataElements = [.. DataElements, InstanceTemplateDataElement.FromModel(dataType, model)],
+            DataElements = [.. DataElements, InstanceTemplateDataElement.FromModel(dataType, model, configure)],
         };
 
     /// <summary>A data element with <paramref name="content"/> stored as it is.</summary>
-    public InstanceTemplate WithData(string dataType, string contentType, byte[] content, string? filename = null) =>
+    public InstanceTemplate WithData(
+        string dataType,
+        string contentType,
+        byte[] content,
+        string? filename = null,
+        Action<DataElement>? configure = null
+    ) =>
         this with
         {
             DataElements =
             [
                 .. DataElements,
-                InstanceTemplateDataElement.FromContent(dataType, contentType, content, filename),
+                InstanceTemplateDataElement.FromContent(dataType, contentType, content, filename, configure),
             ],
         };
 
@@ -87,73 +85,11 @@ public sealed record InstanceTemplate(string Org, string App, int InstanceOwnerP
             Status = Status,
             DataValues = DataValues,
         };
-
-    /// <summary>
-    /// Reads a prepared instance from the test data of Altinn.App.Api.Tests
-    /// (<c>Data/Instances/{org}/{app}/{partyId}/{guid}.pretest.json</c> and the data elements in <c>{guid}/</c>) as
-    /// a template. Ids are dropped, so creating the template gives a new instance with the same owner, process
-    /// state and data. Data elements come from the data folder only, as they did for the prepared instance.
-    /// </summary>
-    public static InstanceTemplate Load(string org, string app, int instanceOwnerPartyId, Guid instanceGuid)
-    {
-        string instanceDirectory = Path.Join(
-            TestData.GetInstancesDirectory(),
-            org,
-            app,
-            instanceOwnerPartyId.ToString()
-        );
-        string instancePath = Path.Join(instanceDirectory, $"{instanceGuid}.pretest.json");
-        Instance stored = ReadJson<Instance>(instancePath);
-
-        var dataElements = new List<InstanceTemplateDataElement>();
-        string dataDirectory = Path.Join(instanceDirectory, instanceGuid.ToString());
-        if (Directory.Exists(dataDirectory))
-        {
-            foreach (
-                string elementPath in Directory
-                    .EnumerateFiles(dataDirectory, "*.pretest.json", SearchOption.TopDirectoryOnly)
-                    .Order(StringComparer.Ordinal)
-            )
-            {
-                DataElement element = ReadJson<DataElement>(elementPath);
-                string blobPath = Path.Join(dataDirectory, "blob", $"{element.Id}.pretest");
-                byte[] content = File.Exists(blobPath) ? File.ReadAllBytes(blobPath) : [];
-                dataElements.Add(
-                    InstanceTemplateDataElement.FromContent(
-                        element.DataType,
-                        element.ContentType ?? "application/octet-stream",
-                        content,
-                        element.Filename
-                    )
-                );
-            }
-        }
-
-        return new InstanceTemplate(org, app, instanceOwnerPartyId)
-        {
-            InstanceOwnerPersonNumber = stored.InstanceOwner?.PersonNumber,
-            InstanceOwnerOrganisationNumber = stored.InstanceOwner?.OrganisationNumber,
-            Process = stored.Process,
-            Status = stored.Status,
-            DataValues = stored.DataValues,
-            DataElements = dataElements,
-        };
-    }
-
-    private static T ReadJson<T>(string path)
-    {
-        if (!File.Exists(path))
-        {
-            throw new FileNotFoundException($"No prepared instance file at {path}", path);
-        }
-        using FileStream stream = File.OpenRead(path);
-        return JsonSerializer.Deserialize<T>(stream, _jsonOptions)
-            ?? throw new InvalidDataException($"{path} did not deserialize to {typeof(T).Name}");
-    }
 }
 
 /// <summary>
 /// A data element of an <see cref="InstanceTemplate"/>: either a model the app serializes, or content stored as it is.
+/// <see cref="Configure"/> runs on the stored element, for tags, locks and other metadata.
 /// </summary>
 public sealed record InstanceTemplateDataElement
 {
@@ -168,14 +104,26 @@ public sealed record InstanceTemplateDataElement
 
     public string? Filename { get; init; }
 
-    public static InstanceTemplateDataElement FromModel(string dataType, object model) =>
-        new() { DataType = dataType, Model = model };
+    public Action<DataElement>? Configure { get; init; }
+
+    public static InstanceTemplateDataElement FromModel(
+        string dataType,
+        object model,
+        Action<DataElement>? configure = null
+    ) =>
+        new()
+        {
+            DataType = dataType,
+            Model = model,
+            Configure = configure,
+        };
 
     public static InstanceTemplateDataElement FromContent(
         string dataType,
         string contentType,
         byte[] content,
-        string? filename = null
+        string? filename = null,
+        Action<DataElement>? configure = null
     ) =>
         new()
         {
@@ -183,5 +131,6 @@ public sealed record InstanceTemplateDataElement
             ContentType = contentType,
             Content = content,
             Filename = filename,
+            Configure = configure,
         };
 }

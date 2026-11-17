@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Altinn.App.Api.Tests.Fixtures.AppFiles;
 using Altinn.App.Api.Tests.Fixtures.Instances;
 using Altinn.App.Api.Tests.Utils;
 using Altinn.App.Core.Constants;
@@ -13,11 +14,11 @@ namespace Altinn.App.Api.Tests.Fixtures;
 /// <summary>
 /// Base class for a test class that shares a host through <typeparamref name="TFixture"/>. xunit creates the
 /// class once per test and runs the tests of a class one at a time, so the constructor and
-/// <see cref="DisposeAsync"/> bracket each test with <see cref="AppApiFixture.BeginTest"/> and
-/// <see cref="AppApiFixture.EndTestAsync"/>.
+/// <see cref="DisposeAsync"/> bracket each test with <see cref="AppTestFixture.BeginTest"/> and
+/// <see cref="AppTestFixture.EndTestAsync"/>.
 /// </summary>
 public abstract class ApiTestBase<TFixture> : IClassFixture<TFixture>, IAsyncDisposable
-    where TFixture : AppApiFixture
+    where TFixture : AppTestFixture
 {
     internal static readonly JsonSerializerOptions JsonSerializerOptions = new()
     {
@@ -31,6 +32,10 @@ public abstract class ApiTestBase<TFixture> : IClassFixture<TFixture>, IAsyncDis
 
     /// <summary>The services of the shared host.</summary>
     protected IServiceProvider Services => Fixture.Services;
+
+    protected string Org => Fixture.Org;
+
+    protected string App => Fixture.App;
 
     protected ApiTestBase(TFixture fixture)
     {
@@ -46,6 +51,20 @@ public abstract class ApiTestBase<TFixture> : IClassFixture<TFixture>, IAsyncDis
         await Fixture.EndTestAsync();
         GC.SuppressFinalize(this);
     }
+
+    /// <summary>
+    /// Serves other app files for the rest of this test, derived from the class's, without building a host.
+    /// </summary>
+    protected void UseAppFiles(Func<AppFilesBuilder, AppFilesBuilder> change) => Fixture.UseAppFiles(change);
+
+    /// <summary>A template for an instance of the fixture's app.</summary>
+    protected InstanceTemplate InstanceOf(int instanceOwnerPartyId) => new(Org, App, instanceOwnerPartyId);
+
+    /// <summary>
+    /// A new instance from <paramref name="template"/> with the ids the platform assigned. Gone when the test ends.
+    /// </summary>
+    protected Task<Instance> CreateInstance(InstanceTemplate template) =>
+        Fixture.CreateInstance(template, TestContext.Current.CancellationToken);
 
     public async Task<HttpClient> GetUserClient(
         int userId = TestAuthentication.DefaultUserId,
@@ -63,22 +82,15 @@ public abstract class ApiTestBase<TFixture> : IClassFixture<TFixture>, IAsyncDis
     public async Task<HttpClient> GetOrgClient(
         string orgNumber = TestAuthentication.DefaultOrgNumber,
         string scope = TestAuthentication.DefaultServiceOwnerScope,
-        string serviceOwnerOrg = TestAuthentication.DefaultOrg,
+        string? serviceOwnerOrg = null,
         bool includeTraceContext = false
     )
     {
         var client = Fixture.CreateClient(includeTraceContext);
-        string token = await Fixture.Platform.GetServiceOwnerToken(orgNumber, serviceOwnerOrg, scope);
+        string token = await Fixture.Platform.GetServiceOwnerToken(orgNumber, serviceOwnerOrg ?? Org, scope);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(AuthorizationSchemes.Bearer, token);
         return client;
     }
-
-    /// <summary>
-    /// Creates a new instance from <paramref name="template"/> through the platform and returns it with the ids the
-    /// platform assigned. It is deleted when the test ends.
-    /// </summary>
-    protected Task<Instance> CreateInstance(InstanceTemplate template) =>
-        Fixture.CreateInstance(template, TestContext.Current.CancellationToken);
 
     /// <summary>Waits for the shared host to have recorded the given telemetry for this test, then snapshots it.</summary>
     protected async Task<TelemetrySnapshot> GetTelemetrySnapshot(int numberOfActivities, int numberOfMetrics)
