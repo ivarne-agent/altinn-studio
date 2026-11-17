@@ -10,8 +10,12 @@ using Altinn.Platform.Register.Enums;
 using Altinn.Platform.Register.Models;
 using Altinn.Platform.Storage.Interface.Models;
 using AltinnCore.Authentication.Constants;
-using Xunit.Abstractions;
 using static Altinn.App.Core.Features.Auth.Authenticated;
+#if XUNIT_V3
+using Xunit.Sdk;
+#else
+using Xunit.Abstractions;
+#endif
 
 namespace Altinn.App.Tests.Common.Auth;
 
@@ -122,11 +126,11 @@ public static class TestAuthentication
     {
         public AllTokens()
         {
-            Add(new(AuthenticationTypes.User, DefaultUserPartyId));
-            Add(new(AuthenticationTypes.SelfIdentifiedUser, DefaultUserPartyId));
-            // Add(new(AuthenticationTypes.Org, DefaultOrgPartyId));
-            Add(new(AuthenticationTypes.ServiceOwner, DefaultOrgPartyId));
-            Add(new(AuthenticationTypes.SystemUser, DefaultOrgPartyId));
+            Add(new TestJwtToken(AuthenticationTypes.User, DefaultUserPartyId));
+            Add(new TestJwtToken(AuthenticationTypes.SelfIdentifiedUser, DefaultUserPartyId));
+            // Add(new TestJwtToken(AuthenticationTypes.Org, DefaultOrgPartyId));
+            Add(new TestJwtToken(AuthenticationTypes.ServiceOwner, DefaultOrgPartyId));
+            Add(new TestJwtToken(AuthenticationTypes.SystemUser, DefaultOrgPartyId));
         }
     }
 

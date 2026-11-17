@@ -1,7 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
+#if XUNIT_V3
+using Xunit;
+#else
 using Xunit.Abstractions;
+#endif
 
 namespace Altinn.App.Tests.Common;
 

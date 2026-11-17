@@ -45,10 +45,12 @@
 
     <InternalsVisibleTo Include="$(AssemblyName).Tests" />
     <InternalsVisibleTo Include="Altinn.App.Api.Tests" />
+    <InternalsVisibleTo Include="Altinn.App.Api.WebApplicationFactory.Tests" />
     <InternalsVisibleTo Include="Altinn.App.Analyzers.Tests" />
     <InternalsVisibleTo Include="Altinn.App.SourceGenerator.Integration.Tests" />
     <InternalsVisibleTo Include="Altinn.App.Benchmarks" />
     <InternalsVisibleTo Include="Altinn.App.Tests.Common" />
+    <InternalsVisibleTo Include="Altinn.App.Tests.Common.XunitV3" />
     <InternalsVisibleTo Include="Altinn.App.Clients.Fiks" />
     <InternalsVisibleTo Include="Altinn.App.Clients.Fiks.Tests" />
     <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />

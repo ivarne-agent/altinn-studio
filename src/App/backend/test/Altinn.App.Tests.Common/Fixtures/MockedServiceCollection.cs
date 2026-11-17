@@ -33,7 +33,11 @@ using OpenTelemetry;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
+#if XUNIT_V3
+using Xunit;
+#else
 using Xunit.Abstractions;
+#endif
 
 namespace Altinn.App.Tests.Common.Fixtures;
 

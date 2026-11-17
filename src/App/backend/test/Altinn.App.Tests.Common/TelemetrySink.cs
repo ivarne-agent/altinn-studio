@@ -21,7 +21,8 @@ public static class TelemetrySinkDI
         Func<ActivitySource, bool>? additionalActivitySources = null,
         Func<Meter, bool>? additionalMeters = null,
         Func<Activity, bool>? filterActivities = null,
-        Func<MetricMeasurement, bool>? filterMetrics = null
+        Func<MetricMeasurement, bool>? filterMetrics = null,
+        Func<TestId?>? testIdAccessor = null
     )
     {
         var telemetryRegistration = services.FirstOrDefault(s => s.ServiceType == typeof(Telemetry));
@@ -37,7 +38,8 @@ public static class TelemetrySinkDI
             additionalActivitySources,
             additionalMeters,
             filterActivities,
-            filterMetrics
+            filterMetrics,
+            testIdAccessor
         ));
         services.AddSingleton<Telemetry>(sp => sp.GetRequiredService<TelemetrySink>().Object);
 
@@ -79,7 +81,7 @@ public sealed record TelemetrySink : IDisposable
 
     private readonly Func<Activity, bool>? _filterActivities;
     private readonly Func<MetricMeasurement, bool>? _filterMetrics;
-    private readonly TestId? _testId;
+    private readonly Func<TestId?> _testIdAccessor;
 
     public async Task<IReadOnlyList<Activity>> WaitForServerActivity(
         int n = 1,
@@ -118,11 +120,40 @@ public sealed record TelemetrySink : IDisposable
     public IReadOnlyDictionary<(string Name, string Meter), IReadOnlyList<MetricMeasurement>> CapturedMetrics =>
         _metricValues.ToImmutableSortedDictionary(
             static kvp => kvp.Key,
-            static kvp => (IReadOnlyList<MetricMeasurement>)kvp.Value.Order().ToArray()
+            static kvp =>
+            {
+                lock (kvp.Value)
+                {
+                    return (IReadOnlyList<MetricMeasurement>)kvp.Value.Order().ToArray();
+                }
+            }
         );
 
     public TelemetrySnapshot GetSnapshot() => new(CapturedActivities, CapturedMetrics);
 
+    /// <summary>
+    /// Forgets everything captured so far. The listeners stay attached, so a host that outlives a test can
+    /// hand the next test a sink that only holds what that test produces.
+    /// </summary>
+    public void Clear()
+    {
+        _activities.Clear();
+        foreach (var measurements in _metricValues.Values)
+        {
+            lock (measurements)
+            {
+                ((List<MetricMeasurement>)measurements).Clear();
+            }
+        }
+        while (_serverActivities.Reader.TryRead(out _)) { }
+        while (_serverMetrics.Reader.TryRead(out _)) { }
+    }
+
+    /// <param name="testIdAccessor">
+    /// Resolves the test the sink captures for, evaluated for every activity and metric. Defaults to the
+    /// <see cref="TestId"/> registered in <paramref name="serviceProvider"/>, read once, which suits a host
+    /// built for a single test. A host shared by several tests supplies the current test's id here instead.
+    /// </param>
     public TelemetrySink(
         IServiceProvider? serviceProvider = null,
         string org = "ttd",
@@ -132,7 +163,8 @@ public sealed record TelemetrySink : IDisposable
         Func<ActivitySource, bool>? additionalActivitySources = null,
         Func<Meter, bool>? additionalMeters = null,
         Func<Activity, bool>? filterActivities = null,
-        Func<MetricMeasurement, bool>? filterMetrics = null
+        Func<MetricMeasurement, bool>? filterMetrics = null,
+        Func<TestId?>? testIdAccessor = null
     )
     {
         _serviceProvider = serviceProvider;
@@ -148,7 +180,12 @@ public sealed record TelemetrySink : IDisposable
         _filterActivities = filterActivities;
         _filterMetrics = filterMetrics;
 
-        _testId = serviceProvider?.GetService<TestId>();
+        if (testIdAccessor is null)
+        {
+            var testId = serviceProvider?.GetService<TestId>();
+            testIdAccessor = () => testId;
+        }
+        _testIdAccessor = testIdAccessor;
 
         var appId = new AppIdentifier(org, name);
         var options = new AppSettings { AppVersion = version };
@@ -237,7 +274,10 @@ public sealed record TelemetrySink : IDisposable
         if (self._filterMetrics is not null && !self._filterMetrics(record))
             return;
 
-        measurements.Add(record);
+        lock (measurements)
+        {
+            measurements.Add(record);
+        }
 
         if (instrument.Name == "http.server.request.duration" && Math.Abs(measurement) > double.Epsilon)
             self._serverMetrics.Writer.TryWrite(record);
@@ -245,7 +285,7 @@ public sealed record TelemetrySink : IDisposable
 
     private bool TestIdActivityFilter(Activity activity)
     {
-        var thisTestId = _testId;
+        var thisTestId = _testIdAccessor();
         if (thisTestId is null)
             return true;
 
@@ -262,7 +302,7 @@ public sealed record TelemetrySink : IDisposable
 
     private bool TestIdMetricFilter(MetricMeasurement metric)
     {
-        var thisTestId = _testId;
+        var thisTestId = _testIdAccessor();
         if (thisTestId is null)
             return true;
 

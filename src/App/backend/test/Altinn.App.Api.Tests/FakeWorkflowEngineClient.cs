@@ -74,6 +74,22 @@ internal sealed class FakeWorkflowEngineClient : IWorkflowEngineClient
         _ = workflowCallbackStateService;
     }
 
+    /// <summary>
+    /// Forgets every workflow, collection, mailbox and delivery. Safe between tests: a workflow is drained
+    /// inside the call that enqueued it, so nothing is in flight once a test has returned.
+    /// </summary>
+    public void Clear()
+    {
+        lock (_gate)
+        {
+            _workflows.Clear();
+            _workflowsByIdempotencyKey.Clear();
+            _collectionHeadsByKey.Clear();
+            _mailboxesByIdempotencyKey.Clear();
+            _deliveriesByKey.Clear();
+        }
+    }
+
     public async Task<WorkflowEnqueueResponse.Accepted> EnqueueWorkflows(
         string ns,
         string idempotencyKey,

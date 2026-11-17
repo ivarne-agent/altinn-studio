@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The xunit v3 flavour of Altinn.App.Tests.Common. It compiles the same sources with XUNIT_V3 defined, so the
+    few places where the v2 and v3 APIs differ live behind #if XUNIT_V3 in the shared files. It exists because
+    xunit v2 and v3 both define Xunit.Assert, so a v3 test project cannot reference the v2 library.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Altinn.App.Tests.Common</RootNamespace>
+    <DefineConstants>$(DefineConstants);XUNIT_V3</DefineConstants>
+
+    <IsPackable>false</IsPackable>
+
+    <NoWarn>$(NoWarn);CS1591;CS0618</NoWarn>
+    <!--
+      CS1591: Don't warn for missing XML doc
+      CS0618: This is a test project, so we usually continue testing [Obsolete] apis
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../Altinn.App.Tests.Common/**/*.cs" Exclude="../Altinn.App.Tests.Common/obj/**;../Altinn.App.Tests.Common/bin/**" LinkBase="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing"/>
+    <PackageReference Include="Moq" />
+    <PackageReference Include="Verify.XunitV3"/>
+    <PackageReference Include="Verify.Http"/>
+    <PackageReference Include="xunit.v3.assert"/>
+    <PackageReference Include="xunit.v3.extensibility.core"/>
+    <PackageReference Include="OpenTelemetry"/>
+    <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Altinn.App.Core/Altinn.App.Core.csproj" />
+    <ProjectReference Include="../../src/Altinn.App.Api/Altinn.App.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Altinn.App.Api.WebApplicationFactory.Tests" />
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="../Altinn.App.Tests.Common/TestResources/**/*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <LinkBase>/</LinkBase>
+      <Link>/%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+
+</Project>

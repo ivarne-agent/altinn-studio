@@ -60,6 +60,11 @@
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.assert" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <!-- xunit v3, used by Altinn.App.Api.WebApplicationFactory.Tests and the v3 flavour of Altinn.App.Tests.Common -->
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <PackageVersion Include="xunit.v3.assert" Version="3.2.2" />
+    <PackageVersion Include="xunit.v3.extensibility.core" Version="3.2.2" />
+    <PackageVersion Include="Verify.XunitV3" Version="30.20.1" />
     <PackageVersion Include="Xunit.Combinatorial" Version="1.7.31" />
     <PackageVersion Include="System.IO.Hashing" Version="10.0.7" />
     <PackageVersion Include="PublicApiGenerator" Version="11.5.4" />
