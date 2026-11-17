@@ -6,7 +6,7 @@
 public sealed class Altinn_App_SourceGenerator_Integration_Tests_Models_SkjemaFormDataWrapper
     : global::Altinn.App.Core.Internal.Data.IFormDataWrapper
 {
-    private readonly global::Altinn.App.SourceGenerator.Integration.Tests.Models.Skjema _dataModel;
+    private global::Altinn.App.SourceGenerator.Integration.Tests.Models.Skjema _dataModel;
 
     public global::System.Type BackingDataType => typeof(global::Altinn.App.SourceGenerator.Integration.Tests.Models.Skjema);
 
@@ -256,6 +256,12 @@ public sealed class Altinn_App_SourceGenerator_Integration_Tests_Models_SkjemaFo
     {
         if (path.IsEmpty)
         {
+            // csharpier-ignore
+            if (value.TryDeserialize<global::Altinn.App.SourceGenerator.Integration.Tests.Models.Skjema>(out var result) && result is not null)
+            {
+                _dataModel = result;
+                return true;
+            }
             return false;
         }
 
@@ -1535,27 +1541,6 @@ public sealed class Altinn_App_SourceGenerator_Integration_Tests_Models_SkjemaFo
             DataType,
             DataElement
         );
-    }
-
-    /// <inheritdoc />
-    public void CopyFrom(object dataModel)
-    {
-        if (dataModel is not global::Altinn.App.SourceGenerator.Integration.Tests.Models.Skjema source)
-        {
-            throw new global::System.ArgumentException(
-                $"Data model must be of type Altinn.App.SourceGenerator.Integration.Tests.Models.Skjema, (was {dataModel?.GetType().FullName ?? "null"})"
-            );
-        }
-
-        if (ReferenceEquals(source, _dataModel))
-        {
-            return;
-        }
-
-        _dataModel.Skjemanummer = source.Skjemanummer;
-        _dataModel.Skjemaversjon = source.Skjemaversjon;
-        _dataModel.Skjemainnhold = CopyRecursive(source.Skjemainnhold);
-        _dataModel.EierAdresse = CopyRecursive(source.EierAdresse);
     }
 
     [return: global::System.Diagnostics.CodeAnalysis.NotNullIfNotNull("data")]

@@ -95,17 +95,6 @@ public interface IInstanceDataMutator : IInstanceDataAccessor
     void RemoveDataElement(DataElementIdentifier dataElementIdentifier);
 
     /// <summary>
-    /// Copies <paramref name="model"/> into the form data of an existing data element.
-    /// </summary>
-    /// <remarks>
-    /// The copy is taken at the call and holds only the fields of the data model.
-    /// Make later changes to the returned object.
-    /// </remarks>
-    /// <returns>The element's form data, the object that <see cref="IInstanceDataAccessor.GetFormData"/> returns</returns>
-    Task<T> ReplaceFormData<T>(DataElementIdentifier dataElementIdentifier, T model)
-        where T : class;
-
-    /// <summary>
     /// Sets tags, metadata, user-defined metadata, refs or the filename of a data element.
     /// </summary>
     void UpdateDataElementMetadata(DataElementIdentifier dataElementIdentifier, DataElementMetadataUpdate update);

@@ -454,7 +454,7 @@ public class ProcessControllerTests : ApiTestBase
         {
             IInstanceDataMutator mutator = context.InstanceDataMutator;
             DataElement formElement = mutator.Instance.Data.Single(dataElement => dataElement.DataType == "default");
-            await mutator.ReplaceFormData(formElement, new Skjema { Melding = new Dummy { Name = "Kari Nordmann" } });
+            (await mutator.GetFormData<Skjema>(formElement)).Melding = new Dummy { Name = "Kari Nordmann" };
             mutator.UpdateDataElementMetadata(formElement, new DataElementMetadataUpdate { Filename = "skjema.xml" });
             mutator.SetDataValue("caseNumber", "2026-1");
             mutator.SetPresentationText("caseTitle", "Name change");

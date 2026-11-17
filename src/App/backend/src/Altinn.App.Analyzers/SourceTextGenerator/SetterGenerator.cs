@@ -6,23 +6,10 @@ internal static class SetterGenerator
 {
     public static void Generate(StringBuilder builder, ModelPathNode rootNode)
     {
-        if (rootNode.Properties.Count == 0)
-        {
-            builder.Append(
-                """
-
-                    /// <inheritdoc />
-                    public bool Set(
-                        global::System.ReadOnlySpan<char> path,
-                        global::Altinn.App.Core.Internal.Expressions.ExpressionValue value
-                    ) => false;
-
-                """
-            );
-            return;
-        }
+        // An empty path replaces the whole data model. The block lets csharpier-ignore apply, as type names can be
+        // longer than the line width
         builder.Append(
-            """
+            $$"""
 
                 /// <inheritdoc />
                 public bool Set(
@@ -32,8 +19,31 @@ internal static class SetterGenerator
                 {
                     if (path.IsEmpty)
                     {
+                        // csharpier-ignore
+                        if (value.TryDeserialize<{{rootNode.TypeName}}>(out var result) && result is not null)
+                        {
+                            _dataModel = result;
+                            return true;
+                        }
                         return false;
                     }
+
+            """
+        );
+        if (rootNode.Properties.Count == 0)
+        {
+            builder.Append(
+                """
+
+                        return false;
+                    }
+
+                """
+            );
+            return;
+        }
+        builder.Append(
+            """
 
                     return SetRecursive(_dataModel, path, 0, value);
                 }

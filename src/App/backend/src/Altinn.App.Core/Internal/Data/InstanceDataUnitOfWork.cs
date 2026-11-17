@@ -191,47 +191,6 @@ internal sealed class InstanceDataUnitOfWork : IInstanceDataMutator
     }
 
     /// <inheritdoc />
-    public async Task<T> ReplaceFormData<T>(DataElementIdentifier dataElementIdentifier, T model)
-        where T : class
-    {
-        ArgumentNullException.ThrowIfNull(model);
-        if (GetUnsavedCreation(dataElementIdentifier) is not null)
-        {
-            throw new InvalidOperationException(
-                $"Data element {dataElementIdentifier.Id} is added in this unit of work and cannot be replaced; change the object passed to AddFormDataElement instead"
-            );
-        }
-
-        if (_changesForDeletion.Any(change => change.DataElementIdentifier == dataElementIdentifier))
-        {
-            throw new InvalidOperationException(
-                $"Data element with id {dataElementIdentifier.Id} is marked for deletion and cannot be updated"
-            );
-        }
-
-        DataType dataType = this.GetDataType(dataElementIdentifier);
-        if (dataType.AppLogic?.ClassRef is not { } classRef)
-        {
-            throw new InvalidOperationException(
-                $"Data type {dataType.Id} does not have a class reference in app metadata"
-            );
-        }
-
-        Type modelType = model.GetType();
-        if (modelType.FullName != classRef)
-        {
-            throw new InvalidOperationException(
-                $"Tried to save {modelType.FullName} as {dataType.Id}, but applicationmetadata.json specifies {classRef}"
-            );
-        }
-
-        IFormDataWrapper formData = await GetFormDataWrapper(dataElementIdentifier);
-        formData.CopyFrom(model);
-        formData.InitializeAltinnRowIds();
-        return formData.BackingData<T>();
-    }
-
-    /// <inheritdoc />
     public IInstanceDataAccessor GetCleanAccessor(RowRemovalOption rowRemovalOption = RowRemovalOption.SetToNull)
     {
         return new CleanInstanceDataAccessor(

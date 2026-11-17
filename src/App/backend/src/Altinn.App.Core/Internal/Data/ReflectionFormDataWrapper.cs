@@ -14,7 +14,7 @@ namespace Altinn.App.Core.Internal.Data;
 /// </summary>
 internal class ReflectionFormDataWrapper : IFormDataWrapper
 {
-    private readonly object _dataModel;
+    private object _dataModel;
 
     /// <summary>
     /// Constructor that wraps a POCO data model, and gives extra tools for working with the data in an object using json like keys and reflection
@@ -62,6 +62,11 @@ internal class ReflectionFormDataWrapper : IFormDataWrapper
     {
         if (path.IsEmpty)
         {
+            if (value.TryDeserialize(_dataModel.GetType(), out object? result) && result is not null)
+            {
+                _dataModel = result;
+                return true;
+            }
             return false;
         }
         var field = path.ToString();
@@ -138,38 +143,6 @@ internal class ReflectionFormDataWrapper : IFormDataWrapper
             DataType,
             DataElement
         );
-    }
-
-    /// <inheritdoc />
-    public void CopyFrom(object dataModel)
-    {
-        Type type = _dataModel.GetType();
-        if (dataModel?.GetType() != type)
-        {
-            throw new ArgumentException(
-                $"Data model must be of type {type.FullName}, (was {dataModel?.GetType().FullName ?? "null"})"
-            );
-        }
-
-        if (ReferenceEquals(dataModel, _dataModel))
-        {
-            return;
-        }
-
-        object copy =
-            JsonSerializer.Deserialize(JsonSerializer.SerializeToUtf8Bytes(dataModel), type)
-            ?? throw new InvalidOperationException("Failed to copy data model");
-        foreach (PropertyInfo property in type.GetProperties())
-        {
-            // The json copy holds nothing for an ignored property, so the wrapped object keeps its own value.
-            bool ignoredInJson =
-                property.GetCustomAttribute<System.Text.Json.Serialization.JsonIgnoreAttribute>() is
-                { Condition: System.Text.Json.Serialization.JsonIgnoreCondition.Always };
-            if (property.CanRead && property.CanWrite && property.GetIndexParameters().Length == 0 && !ignoredInJson)
-            {
-                property.SetValue(_dataModel, property.GetValue(copy));
-            }
-        }
     }
 
     /// <inheritdoc />

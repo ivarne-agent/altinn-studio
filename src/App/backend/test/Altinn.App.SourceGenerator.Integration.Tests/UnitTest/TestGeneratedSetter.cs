@@ -139,6 +139,54 @@ public class TestGeneratedSetter
     }
 
     [Fact]
+    public void TestSet_EmptyPath_ReplacesTheWholeModel_BothImplementations()
+    {
+        const string json = """{"skjemanummer":"replaced","eierAdresse":{"gate":"new-street"}}""";
+        var generatedSkjema = CreateTestSkjema();
+        IFormDataWrapper generatedWrapper =
+            new Altinn_App_SourceGenerator_Integration_Tests_Models_SkjemaFormDataWrapper(generatedSkjema, null!);
+        var reflectionSkjema = CreateTestSkjema();
+        IFormDataWrapper reflectionWrapper = new ReflectionFormDataWrapper(reflectionSkjema, null!);
+
+        foreach (
+            var (wrapper, original) in new[]
+            {
+                (generatedWrapper, generatedSkjema),
+                (reflectionWrapper, reflectionSkjema),
+            }
+        )
+        {
+            Assert.True(wrapper.Set("", JsonNode.Parse(json)!));
+
+            var replaced = wrapper.BackingData<Skjema>();
+            Assert.NotSame(original, replaced);
+            Assert.Equal("replaced", replaced.Skjemanummer);
+            Assert.Null(replaced.Skjemainnhold);
+            Assert.Equal("new-street", wrapper.Get("eierAdresse.gate"));
+            Assert.Equal("1243", original.Skjemanummer);
+        }
+        Assert.Equal(
+            JsonSerializer.Serialize(reflectionWrapper.BackingData<Skjema>()),
+            JsonSerializer.Serialize(generatedWrapper.BackingData<Skjema>())
+        );
+    }
+
+    [Fact]
+    public void TestSet_EmptyPathToNull_KeepsTheModel_BothImplementations()
+    {
+        var generatedSkjema = CreateTestSkjema();
+        IFormDataWrapper generatedWrapper =
+            new Altinn_App_SourceGenerator_Integration_Tests_Models_SkjemaFormDataWrapper(generatedSkjema, null!);
+        var reflectionSkjema = CreateTestSkjema();
+        IFormDataWrapper reflectionWrapper = new ReflectionFormDataWrapper(reflectionSkjema, null!);
+
+        Assert.False(generatedWrapper.Set("", ExpressionValue.Null));
+        Assert.False(reflectionWrapper.Set("", ExpressionValue.Null));
+        Assert.Same(generatedSkjema, generatedWrapper.BackingData<Skjema>());
+        Assert.Same(reflectionSkjema, reflectionWrapper.BackingData<Skjema>());
+    }
+
+    [Fact]
     public void TestSet_NullIntoValueTypeElement_BothImplementations()
     {
         var generatedSkjema = CreateTestSkjema();
@@ -282,7 +330,7 @@ public class TestGeneratedSetter
     }
 
     [Theory]
-    [InlineData("")] // empty path
+    [InlineData("")] // empty path, where a string is not a data model
     [InlineData("not-exists")] // non-existent path
     [InlineData("skjemanummer.not-exists")] // invalid nested path on primitive
     [InlineData("skjemainnhold[99].navn")] // out of bounds index - returns false
@@ -429,6 +477,12 @@ public class TestGeneratedSetter
         // Both should fail as there are no properties to set
         Assert.False(generatedResult);
         Assert.False(reflectionResult);
+
+        // The empty path still replaces the whole model
+        Assert.True(generatedWrapper.Set("", JsonNode.Parse("{}")!));
+        Assert.True(reflectionWrapper.Set("", JsonNode.Parse("{}")!));
+        Assert.NotSame(model, generatedWrapper.BackingData<Empty>());
+        Assert.NotSame(model, reflectionWrapper.BackingData<Empty>());
     }
 
     [Theory]

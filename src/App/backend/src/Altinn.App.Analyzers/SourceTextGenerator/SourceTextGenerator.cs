@@ -26,7 +26,7 @@ public static class SourceTextGenerator
             public sealed class {{className}}
                 : global::Altinn.App.Core.Internal.Data.IFormDataWrapper
             {
-                private readonly {{rootNode.TypeName}} _dataModel;
+                private {{rootNode.TypeName}} _dataModel;
 
                 public global::System.Type BackingDataType => typeof({{rootNode.TypeName}});
 

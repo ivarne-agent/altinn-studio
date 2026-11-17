@@ -53,8 +53,9 @@ public interface IFormDataWrapper
     /// </summary>
     /// <remarks>
     /// Objects and lists on the path are created when they are null. Use <see cref="AddRow"/> to append to a list.
+    /// An empty path replaces the whole data model, which <see cref="BackingData{T}"/> then returns.
     /// </remarks>
-    /// <param name="path">The dotted path to use (including inline indexes)</param>
+    /// <param name="path">The dotted path to use (including inline indexes), or empty for the whole data model</param>
     /// <param name="value">The value to set (will be automatically converted to the target type if possible)</param>
     /// <returns>True if the value was set successfully, false if the path could not be resolved or type conversion failed</returns>
     bool Set(ReadOnlySpan<char> path, ExpressionValue value);
@@ -96,15 +97,6 @@ public interface IFormDataWrapper
     /// Make a deep copy of the form data
     /// </summary>
     IFormDataWrapper Copy();
-
-    /// <summary>
-    /// Copy the fields of the data model from <paramref name="dataModel"/>, which must be of the same type,
-    /// into the wrapped object
-    /// </summary>
-    /// <remarks>
-    /// Other members are not copied: the wrapped object keeps its own, and nested objects get their defaults.
-    /// </remarks>
-    void CopyFrom(object dataModel);
 
     /// <summary>
     /// Set all Guid AltinnRowId fields to Guid.Empty (so that they don't get serialized to xml or json)

@@ -7,7 +7,7 @@
 public sealed class Altinn_App_SourceGenerator_Tests_SkjemaFormDataWrapper
     : global::Altinn.App.Core.Internal.Data.IFormDataWrapper
 {
-    private readonly global::Altinn.App.SourceGenerator.Tests.Skjema _dataModel;
+    private global::Altinn.App.SourceGenerator.Tests.Skjema _dataModel;
 
     public global::System.Type BackingDataType => typeof(global::Altinn.App.SourceGenerator.Tests.Skjema);
 
@@ -51,7 +51,21 @@ public sealed class Altinn_App_SourceGenerator_Tests_SkjemaFormDataWrapper
     public bool Set(
         global::System.ReadOnlySpan<char> path,
         global::Altinn.App.Core.Internal.Expressions.ExpressionValue value
-    ) => false;
+    )
+    {
+        if (path.IsEmpty)
+        {
+            // csharpier-ignore
+            if (value.TryDeserialize<global::Altinn.App.SourceGenerator.Tests.Skjema>(out var result) && result is not null)
+            {
+                _dataModel = result;
+                return true;
+            }
+            return false;
+        }
+
+        return false;
+    }
 
     #endregion Setters
     #region AddRow
@@ -123,22 +137,6 @@ public sealed class Altinn_App_SourceGenerator_Tests_SkjemaFormDataWrapper
             DataType,
             DataElement
         );
-    }
-
-    /// <inheritdoc />
-    public void CopyFrom(object dataModel)
-    {
-        if (dataModel is not global::Altinn.App.SourceGenerator.Tests.Skjema source)
-        {
-            throw new global::System.ArgumentException(
-                $"Data model must be of type Altinn.App.SourceGenerator.Tests.Skjema, (was {dataModel?.GetType().FullName ?? "null"})"
-            );
-        }
-
-        if (ReferenceEquals(source, _dataModel))
-        {
-            return;
-        }
     }
 
     [return: global::System.Diagnostics.CodeAnalysis.NotNullIfNotNull("data")]
