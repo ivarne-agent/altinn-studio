@@ -1,11 +1,16 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Altinn.App.Api.Tests.Data;
+using Altinn.App.Api.Tests.Fixtures.Instances;
 using Altinn.App.Api.Tests.Fixtures.Platform;
 using Altinn.App.Api.Tests.Mocks;
 using Altinn.App.Core.Configuration;
+using Altinn.App.Core.Internal.Data;
+using Altinn.App.Core.Internal.Instances;
 using Altinn.App.Core.Internal.WorkflowEngine;
 using Altinn.App.Core.Internal.WorkflowEngine.Http;
+using Altinn.App.Core.Models;
+using Altinn.Platform.Storage.Interface.Models;
 using App.IntegrationTests.Mocks.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -44,6 +49,7 @@ public abstract class AppApiFixture : WebApplicationFactory<Program>, IAsyncLife
     private readonly ConcurrentDictionary<Type, Mock> _mocks = new();
     private readonly List<WebApplicationFactory<Program>> _ownHosts = [];
     private readonly Dictionary<string, string?> _configOverrides = new();
+    private readonly List<InstanceIdentifier> _createdInstances = [];
     private ITestOutputHelper? _output;
 
     /// <summary>The id of the test the host is serving, set by <see cref="BeginTest"/>.</summary>
@@ -255,10 +261,115 @@ public abstract class AppApiFixture : WebApplicationFactory<Program>, IAsyncLife
         (Services.GetService<IWorkflowEngineClient>() as FakeWorkflowEngineClient)?.Clear();
     }
 
-    public void EndTest()
+    /// <summary>Deletes what the test created, then forgets the test.</summary>
+    public async Task EndTestAsync()
     {
-        _currentTestId.Value = null;
-        _output = null;
+        try
+        {
+            await DeleteCreatedInstances();
+        }
+        finally
+        {
+            _currentTestId.Value = null;
+            _output = null;
+        }
+    }
+
+    /// <summary>
+    /// Creates a new instance from <paramref name="template"/> through the host's <see cref="IInstanceClient"/> and
+    /// <see cref="IDataClient"/>, the platform assigning the instance guid and the data element ids, and returns it
+    /// as the platform stores it. The instance is tracked and deleted by <see cref="DeleteCreatedInstances"/>.
+    /// </summary>
+    public async Task<Instance> CreateInstance(InstanceTemplate template, CancellationToken cancellationToken = default)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var instanceClient = scope.ServiceProvider.GetRequiredService<IInstanceClient>();
+        var dataClient = scope.ServiceProvider.GetRequiredService<IDataClient>();
+
+        Instance created = await instanceClient.CreateInstance(
+            template.Org,
+            template.App,
+            template.ToInstance(),
+            authenticationMethod: null,
+            cancellationToken
+        );
+        var identifier = new InstanceIdentifier(created);
+        lock (_createdInstances)
+        {
+            _createdInstances.Add(identifier);
+        }
+
+        foreach (InstanceTemplateDataElement element in template.DataElements)
+        {
+            if (element.Model is not null)
+            {
+                await dataClient.InsertFormData(
+                    created,
+                    element.DataType,
+                    element.Model,
+                    authenticationMethod: null,
+                    cancellationToken
+                );
+            }
+            else
+            {
+                using var content = new MemoryStream(element.Content ?? []);
+                await dataClient.InsertBinaryData(
+                    created.Id,
+                    element.DataType,
+                    element.ContentType
+                        ?? throw new InvalidOperationException(
+                            $"Data element {element.DataType} of the template has neither a model nor a content type."
+                        ),
+                    element.Filename,
+                    content,
+                    generatedFromTask: null,
+                    authenticationMethod: null,
+                    cancellationToken
+                );
+            }
+        }
+
+        return await instanceClient.GetInstance(
+            template.App,
+            template.Org,
+            identifier.InstanceOwnerPartyId,
+            identifier.InstanceGuid,
+            authenticationMethod: null,
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    /// Hard-deletes every instance <see cref="CreateInstance"/> made since the last call. A failure is written to
+    /// the test output and does not fail the test.
+    /// </summary>
+    public async Task DeleteCreatedInstances()
+    {
+        InstanceIdentifier[] instances;
+        lock (_createdInstances)
+        {
+            instances = [.. _createdInstances];
+            _createdInstances.Clear();
+        }
+        if (instances.Length == 0)
+        {
+            return;
+        }
+
+        await using var scope = Services.CreateAsyncScope();
+        var instanceClient = scope.ServiceProvider.GetRequiredService<IInstanceClient>();
+        foreach (InstanceIdentifier instance in instances)
+        {
+            try
+            {
+                await instanceClient.DeleteInstance(instance.InstanceOwnerPartyId, instance.InstanceGuid, hard: true);
+            }
+            catch (Exception e)
+            {
+                _output?.WriteLine($"Could not delete instance {instance} created by the test: {e}");
+            }
+        }
     }
 
     /// <summary>

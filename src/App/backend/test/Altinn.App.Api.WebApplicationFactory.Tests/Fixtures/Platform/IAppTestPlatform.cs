@@ -1,12 +1,14 @@
-using System.Runtime.CompilerServices;
 using Altinn.App.Core.Configuration;
 
 namespace Altinn.App.Api.Tests.Fixtures.Platform;
 
 /// <summary>
-/// What a test needs from the platform behind the app: tokens, instances and the settings that point the app
-/// at it. Tests reach it through <see cref="ApiTestBase{TFixture}"/> and <see cref="AppApiFixture"/> only, so
-/// that a second implementation changes no test.
+/// What a test needs from the platform behind the app that the app's own clients cannot give it: tokens, and
+/// the settings that point the app at the platform. Instances are created and deleted through the host's
+/// <c>IInstanceClient</c> and <c>IDataClient</c> instead (<see cref="AppApiFixture.CreateInstance"/>), which are
+/// mocks or the real clients depending on <see cref="Kind"/>. Tests reach the platform through
+/// <see cref="ApiTestBase{TFixture}"/> and <see cref="AppApiFixture"/> only, so that a second implementation
+/// changes no test.
 /// </summary>
 public interface IAppTestPlatform
 {
@@ -26,18 +28,4 @@ public interface IAppTestPlatform
         string org = TestAuthentication.DefaultOrg,
         string scope = TestAuthentication.DefaultServiceOwnerScope
     );
-
-    /// <summary>
-    /// Resets an instance and its data to the state the test data describes. <paramref name="callerFilePath"/>
-    /// identifies the test file that owns the instance; two files must not prepare the same one.
-    /// </summary>
-    Task PrepareInstance(
-        string org,
-        string app,
-        int instanceOwnerId,
-        Guid instanceGuid,
-        [CallerFilePath] string callerFilePath = ""
-    );
-
-    Task DeleteInstance(string org, string app, int instanceOwnerId, Guid instanceGuid);
 }

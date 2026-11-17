@@ -52,8 +52,9 @@
   <!--
     Test infrastructure shared with the v2 project while the tests move. Files that are tests themselves, the v2
     test host (Program.cs) and the v2 base class (CustomWebApplicationFactory.cs) are not linked.
-    TestData.cs resolves the test data root from its own source path, so the app folders are read from, and the
-    instance files written into, Altinn.App.Api.Tests/Data.
+    TestData.cs resolves the test data root from its own source path, so the app folders and the prepared
+    instances that serve as templates are read from Altinn.App.Api.Tests/Data. This project only reads that
+    folder: instances are created through the platform clients and hard-deleted when the test ends.
   -->
   <ItemGroup>
     <Compile Include="../Altinn.App.Api.Tests/Data/**/*.cs" LinkBase="Data" />

@@ -1,9 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Altinn.App.Api.Tests.Fixtures.Instances;
 using Altinn.App.Api.Tests.Utils;
 using Altinn.App.Core.Constants;
+using Altinn.Platform.Storage.Interface.Models;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,10 +13,10 @@ namespace Altinn.App.Api.Tests.Fixtures;
 /// <summary>
 /// Base class for a test class that shares a host through <typeparamref name="TFixture"/>. xunit creates the
 /// class once per test and runs the tests of a class one at a time, so the constructor and
-/// <see cref="Dispose"/> bracket each test with <see cref="AppApiFixture.BeginTest"/> and
-/// <see cref="AppApiFixture.EndTest"/>.
+/// <see cref="DisposeAsync"/> bracket each test with <see cref="AppApiFixture.BeginTest"/> and
+/// <see cref="AppApiFixture.EndTestAsync"/>.
 /// </summary>
-public abstract class ApiTestBase<TFixture> : IClassFixture<TFixture>, IDisposable
+public abstract class ApiTestBase<TFixture> : IClassFixture<TFixture>, IAsyncDisposable
     where TFixture : AppApiFixture
 {
     internal static readonly JsonSerializerOptions JsonSerializerOptions = new()
@@ -40,9 +41,9 @@ public abstract class ApiTestBase<TFixture> : IClassFixture<TFixture>, IDisposab
         Fixture.BeginTest();
     }
 
-    public virtual void Dispose()
+    public virtual async ValueTask DisposeAsync()
     {
-        Fixture.EndTest();
+        await Fixture.EndTestAsync();
         GC.SuppressFinalize(this);
     }
 
@@ -72,17 +73,12 @@ public abstract class ApiTestBase<TFixture> : IClassFixture<TFixture>, IDisposab
         return client;
     }
 
-    /// <summary>Resets an instance of the fixture's app to the state the test data describes.</summary>
-    protected Task PrepareInstance(
-        string org,
-        string app,
-        int instanceOwnerId,
-        Guid instanceGuid,
-        [CallerFilePath] string callerFilePath = ""
-    ) => Fixture.Platform.PrepareInstance(org, app, instanceOwnerId, instanceGuid, callerFilePath);
-
-    protected Task DeleteInstance(string org, string app, int instanceOwnerId, Guid instanceGuid) =>
-        Fixture.Platform.DeleteInstance(org, app, instanceOwnerId, instanceGuid);
+    /// <summary>
+    /// Creates a new instance from <paramref name="template"/> through the platform and returns it with the ids the
+    /// platform assigned. It is deleted when the test ends.
+    /// </summary>
+    protected Task<Instance> CreateInstance(InstanceTemplate template) =>
+        Fixture.CreateInstance(template, TestContext.Current.CancellationToken);
 
     /// <summary>Waits for the shared host to have recorded the given telemetry for this test, then snapshots it.</summary>
     protected async Task<TelemetrySnapshot> GetTelemetrySnapshot(int numberOfActivities, int numberOfMetrics)

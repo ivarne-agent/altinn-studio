@@ -51,8 +51,8 @@ public static class TestPlatformSelection
             TestPlatform.InMemory => new InMemoryTestPlatform(),
             TestPlatform.Localtest => throw new NotSupportedException(
                 $"{nameof(TestPlatform.Localtest)} is not implemented. It needs an {nameof(IAppTestPlatform)} that "
-                    + "fetches tokens from localtest and prepares instances through its API, the localtest branch of "
-                    + "ConfigurePlatformServices in Program.cs, and a host that listens on a real port "
+                    + "fetches tokens from localtest, the localtest branch of ConfigurePlatformServices in "
+                    + "Program.cs, and a host that listens on a real port "
                     + $"({nameof(AppApiFixture)}.ConfigureWebHost)."
             ),
             _ => throw new ArgumentOutOfRangeException(nameof(Current), Current, "Unknown test platform"),
